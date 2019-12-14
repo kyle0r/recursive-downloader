@@ -1,71 +1,89 @@
-// Set the start URL
-var startUrl = 'https://domain.tld/example/path';
+var urls = [
+'https://domain.tld/example/path'
+];
+
+var system = require('system');
+var http_pw = system.env['spider_pw'];
+
+urlPrefix='https://domain.tld/example'
+
+var casper = require('casper').create({ /*verbose: true, logLevel: 'debug'*/ });
+var utils = require('utils');
 
 // URL variables
-var visitedUrls = [], pendingUrls = [];
+var visitedUrls = [], pendingUrls = [], actualDownloads = [];
 
-// Create instances
-var casper = require('casper').create({ /*verbose: true, logLevel: 'debug'*/ });
-var utils = require('utils')
-var helpers = require('./helpers')
+var textHtmlRegEx = new RegExp('text/html', 'i');
+var uriFilter = [
+   /^\?/
+  ,/^\//
+  ,/^(http|ftp|sftp)/
+];
 
-// Spider from the given URL
-function spider(url) {
+function spider(myUri) {
+  casper.open(myUri, { method: 'head' }).then(function(response) {
+    console.log('START OPEN')
+    visitedUrls.push(response.url)
+    console.log('Opened:', response.url, 'contentType:', response.contentType);
+    if (textHtmlRegEx.test(response.contentType)) {
+      console.log('matched content type:', response.url, 'contentType: ', response.contentType);
 
-	// Add the URL to the visited stack
-	visitedUrls.push(url);
+      casper.open(response.url, { method: 'get' } ).then(function(response) {
+        console.log('fetched:', response.url);
+        
+        // Find links present on this page
+        var links = this.evaluate(function() {
+          var links = [];
+          Array.prototype.forEach.call(__utils__.findAll('a'), function(e) {
+            links.push(e.getAttribute('href'));
+          });
+          return links;
+        });
 
-	// Open the URL
-	casper.open(url, { method: 'get' } ).then(function(response) {
+        Array.prototype.forEach.call(links, function(link) {
+          if (! uriFilter.some(function(rx) { return rx.test(link); }) ) {
+            console.log('Append pending:', response.url+link);
+            // FIXME ensure the / gets between the url and link
+            pendingUrls.push(response.url+link);
+          }
+        });
 
-		this.echo(response.contentType)
-		// Set the status style based on server status code
-		var status = this.status().currentHTTPStatus;
-		switch(status) {
-			case 200: var statusStyle = { fg: 'green', bold: true }; break;
-			case 404: var statusStyle = { fg: 'red', bold: true }; break;
-			 default: var statusStyle = { fg: 'magenta', bold: true }; break;
-		}
-
-		// Display the spidered URL and status
-		this.echo(this.colorizer.format(status, statusStyle) + ' ' + url);
-
-		// Find links present on this page
-		var links = this.evaluate(function() {
-			var links = [];
-			Array.prototype.forEach.call(__utils__.findAll('a'), function(e) {
-				links.push(e.getAttribute('href'));
-			});
-			return links;
-		});
-
-		// Add newly found URLs to the stack
-		var baseUrl = this.getGlobal('location').origin;
-		Array.prototype.forEach.call(links, function(link) {
-			var newUrl = helpers.absoluteUri(baseUrl, link);
-			if (pendingUrls.indexOf(newUrl) == -1 && visitedUrls.indexOf(newUrl) == -1) {
-				//casper.echo(casper.colorizer.format('-> Pushed ' + newUrl + ' onto the stack', { fg: 'magenta' }));
-				pendingUrls.push(newUrl);
-			}
-		});
-
-		// If there are URLs to be processed
-		if (pendingUrls.length > 0) {
-			var nextUrl = pendingUrls.shift();
-			this.echo(this.colorizer.format('<- Popped ' + nextUrl + ' from the stack', { fg: 'blue' }));
-			spider(nextUrl);
-		}
-
-	});
-
+        check_pending();
+        
+      });
+    } else {
+      this.echo(this.colorizer.format('Actual Download: '+ response.url, { fg: 'green' }));
+      actualDownloads.push(response.url);
+      check_pending();
+    }
+    console.log('END OPEN')
+  });
 }
 
-// Start spidering
-casper.start(startUrl, function() {
-	spider(startUrl);
+function check_pending() {
+  console.log('check pending:', pendingUrls.length);
+  // If there are URLs to be processed
+  if (pendingUrls.length > 0) {
+    var nextUrl = pendingUrls.shift();
+    casper.echo(casper.colorizer.format('<- Popped ' + nextUrl + ' from the stack', { fg: 'blue' }));
+    spider(nextUrl);
+  }
+}
+
+casper.start().eachThen(urls, function(response) {
+  spider(response.data);
+  console.log('NEXT URI LOOP\n');
 });
 
-casper.setHttpAuth('username', 'password');
+casper.setHttpAuth('username', http_pw);
 
-// Start the run
-casper.run();
+
+casper.run(function() {
+  console.log('\nfinished\n==CUT==');
+  Array.prototype.forEach.call(actualDownloads, function(link) {
+    casper.echo(link);
+    casper.echo(' out='+decodeURIComponent(link.replace(urlPrefix, '')));
+  });
+  this.exit();
+});
+

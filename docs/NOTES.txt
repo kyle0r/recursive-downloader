@@ -1,0 +1,106 @@
+# ~2021-DEC
+
+# It seems in Debian releases post buster that phantomjs / casperjs have issues with TLS / SSL.
+# Quick testing, spider worked for non https URI's 😐
+
+# First it looks like an omv upgrade required nodejs to be remove from the system
+# the follow steps resolve that:
+
+# inspect the installer script
+curl -L https://deb.nodesource.com/setup_17.x |vim -
+
+# if OK/SAFE then install
+curl -fsSL https://deb.nodesource.com/setup_17.x | bash -x -
+
+# ensure to review the output to see everything was OK and SAFE/SECURE.
+
+# finally install nodejs
+apt-get install nodejs
+
+# note that phantomjs and casperjs both seem to be deprecated
+# casperjs: This repository has been archived by the owner. It is now read-only. 
+# https://github.com/casperjs/casperjs
+
+# phantomjs: Package renamed to phantomjs-prebuilt. Please update 'phantomjs' package references to 'phantomjs-prebuilt'
+# https://www.npmjs.com/package/phantomjs
+
+# phantomjs-prebuilt: This package has been deprecated
+# https://www.npmjs.com/package/phantomjs-prebuilt
+# https://github.com/Medium/phantomjs
+# WARNING: This repository and NPM package are now deprecated since PhantomJS development had been suspended.
+
+# this looks like the original repo of phantomjs
+# https://github.com/ariya/phantomjs
+# read: Archiving the project: suspending the development #15344
+# https://github.com/ariya/phantomjs/issues/15344
+
+# OK, once i got node installed I had some issues running the script, probably due to cruft/old packages
+# so this was my approach to solve this:
+
+# First, I took backups!
+
+# I tried a simple npm update but that actually nuked everything :(
+root@hostname:/srv/mstore/!incoming/spider# npm update
+
+removed 114 packages, and audited 1 package in 1s
+
+found 0 vulnerabilities
+npm notice
+npm notice New minor version of npm available! 8.1.4 -> 8.3.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v8.3.0
+npm notice Run npm install -g npm@8.3.0 to update!
+npm notice
+
+# here is what helped in the end, from the spider dir as root
+npm install -g npm@8.3.0
+npm install casperjs phantomjs --save # << PROBABLY NOT NEEDED?
+npm install casperjs phantomjs-prebuilt --save
+
+# IMPORTANT NOTE: it seems in the past I had not used --save which means the package.json isn't created?
+
+# The first error I got was:
+Auto configuration failed
+139830042541696:error:25066067:DSO support routines:DLFCN_LOAD:could not load the shared library:dso_dlfcn.c:185:filename(libssl_conf.so): libssl_conf.so: cannot open shared object file: No such file or directory
+139830042541696:error:25070067:DSO support routines:DSO_load:could not load the shared library:dso_lib.c:244:
+139830042541696:error:0E07506E:configuration file routines:MODULE_LOAD_DSO:error loading dso:conf_mod.c:285:module=ssl_conf, path=ssl_conf
+139830042541696:error:0E076071:configuration file routines:MODULE_RUN:unknown module name:conf_mod.c:222:module=ssl_conf
+
+# I think sorting out the npm and packges fixed the above error? I cannot reproduce it anymore. 😐
+
+# I was able to mute that error by setting env var:
+OPENSSL_CONF="/dev/null"
+
+# but i think that just masked the issue, the script works without the env var now.
+
+# I was able to get the script to work by adding --ignore-ssl-errors=yes, the --ssl-protocol=TLSv1.2 is just to max out phantomjs supported TLS version as a best practice.
+PATH=$PATH:node_modules/phantomjs-prebuilt/bin node_modules/casperjs/bin/casperjs --ssl-protocol=TLSv1.2 --ignore-ssl-errors=yes spider.js
+
+# its strange that --ignore-ssl-errors=no does not actually output any errors :(
+# this cost a few hours to figure out and only by trial and error did I find a solution
+# Q: what is muting the ssl errors?
+
+# even running the spider.js~debug doesn't help show the ssl errors
+# But the debug helped a little, THE CLUES were null properties of the resposne object and:
+[info] [phantom] ...uri... (HTTP 0)
+
+# a 0 http response code? 💀
+
+# only once I tried a non https uri did things really *click* and I played around with the phantomjs TLS related arguments.
+
+
+-----
+
+# next issue was a strange WARN from aria2c:
+12/15 06:49:01 [WARN] aria2c had to connect to the other side using an unknown TLS protocol. The integrity and confidentiality of the connection might be compromised.
+
+# however this turned out to be a non-issue
+# see: https://unix.stackexchange.com/a/523465/19406
+
+# once upgraded to bullseye this WARN will go away
+
+# see: https://github.com/aria2/aria2/issues/1488
+# it was quite useful to discover:
+aria2c https://www.howsmyssl.com/a/check && cat check
+
+# which shows the TLS properties for the aria2c connection includig TLS versions and ciphers 
+

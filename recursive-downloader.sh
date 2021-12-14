@@ -95,7 +95,8 @@ echo;echo
 echo "spider.js (CasperJS) will now spider the URI's"
 generic_pause
 
-PATH=$PATH:node_modules/phantomjs-prebuilt/bin node_modules/casperjs/bin/casperjs bin/spider.js </dev/null | tac | sed -n '/==CUT==/q;p' | tac > "$aria_downloads_manifest"
+# 2021-12-15 read the NOTES.txt and thx to this answer: https://stackoverflow.com/a/31124453/490487
+OPENSSL_CONF=/dev/null PATH=$PATH:node_modules/phantomjs-prebuilt/bin node_modules/casperjs/bin/casperjs --ssl-protocol=TLSv1.2 --ignore-ssl-errors=yes bin/spider.js </dev/null | tac | sed -n '/==CUT==/q;p' | tac > "$aria_downloads_manifest" 
 
 echo;echo
 echo -n "Would you like to view/edit the download manifest with $EDITOR before the download(s) start? [Y/n]? "

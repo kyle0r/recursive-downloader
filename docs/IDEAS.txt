@@ -1,0 +1,5 @@
+* aria2c web interface, does omv have something for this?
+  AFAIK https://github.com/ziahamza/webui-aria2 should do the trick
+* React app to handle entering URI's and opening aria2c web interface
+  💡 could review the edge-network-control reactapp I created?
+* React app feature to grab uri's via yt-dlp (unrelated to spider/aria2c)

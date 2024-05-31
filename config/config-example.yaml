@@ -1,0 +1,23 @@
+# A txt file list of URI's to download recursively, one per line
+uriFile: ./uris.txt
+
+# Blank/comment this to skip http basic auth
+username: example-username
+
+# URI's that match these regex patterns will be blacklisted
+uriFilter:
+  - '^(http|ftp|sftp|file|ws|wss|urn)://' # customise this to your requirements
+  - '^\?' # blacklist relative URI's starting with ? (query strings)
+  - '^\/' # blacklist relative URI's starting with a forward slash
+  - '^blob:' # blacklist blob URI's
+  - 'javascript:' # blacklist javascript URI's
+
+# You can strip paths if you wish, this will affect the locally created path
+# structure. i.e. the specified string will be removed from the local path.
+# Blank/comment this if you don't need it
+uriStripPaths: '/strip/these/paths/'
+
+# Local path where downloads should be placed, relative or absolute.
+# This will be appended to uri.pathname in local paths.
+# Blank/comment this and only the uri.pathname will be used.
+downloadPath: '../'

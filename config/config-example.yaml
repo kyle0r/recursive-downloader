@@ -5,12 +5,20 @@ uriFile: ./uris.txt
 username: example-username
 
 # URI's that match these regex patterns will be blacklisted
-uriFilter:
+uriBlacklist:
   - '^(http|ftp|sftp|file|ws|wss|urn)://' # customise this to your requirements
   - '^\?' # blacklist relative URI's starting with ? (query strings)
   - '^\/' # blacklist relative URI's starting with a forward slash
   - '^blob:' # blacklist blob URI's
   - 'javascript:' # blacklist javascript URI's
+
+# Domain whitelist: matches on uri.host, supports regex, port can be included.
+# WARNING: if you don't use whitelisting, spider.js will keep crawling until it
+# runs out of a.hrefs, hypothetically this could be a very large number of web 
+# pages and a lot of network traffic. Please use responsibly.
+domainWhitelist:
+  - 'sub.domain.tld'
+  - 'domain2.tld'
 
 # You can strip paths if you wish, this will affect the locally created path
 # structure. i.e. the specified string will be removed from the local path.
@@ -20,4 +28,4 @@ uriStripPaths: '/strip/these/paths/'
 # Local path where downloads should be placed, relative or absolute.
 # This will be appended to uri.pathname in local paths.
 # Blank/comment this and only the uri.pathname will be used.
-downloadPath: '../'
+downloadPath: '../' 

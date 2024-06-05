@@ -263,6 +263,25 @@ node_modules/tough-cookie
 
 4 vulnerabilities (3 moderate, 1 high)
 
-Some issues need review, and may require choosing
-a different dependency.
+Some issues need review, and may require choosing a different dependency.
 
+</shell-output>
+</shell-commands>
+
+-----
+
+2024-06-05
+
+When a recent dist-upgrade to Debian 12 bookworm broke my install of yt-dlp...
+while solving the issue and fixing my aliases and functions, I rediscovered/rem-
+embered that that yt-dlp has a dependency on phantomjs:
+> Used in extractors where javascript needs to be run.
+
+EXPLOITS
+
+It might be possible to use snyk-protect package to mitigate known/patchable
+exploits: https://www.npmjs.com/package/@snyk/protect
+Worth testing at least!
+
+An example repo (casperjs fork) which has a snyk PR related to the exploits:
+https://github.com/hudl/casperjs/pull/19/files

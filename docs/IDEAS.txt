@@ -3,3 +3,5 @@
 * React app to handle entering URI's and opening aria2c web interface
   💡 could review the edge-network-control reactapp I created?
 * React app feature to grab uri's via yt-dlp (unrelated to spider/aria2c)
+* What method can I use to verify recursive website mirroring/archiving?
+  wget --spider --mirror ? see: original recursive-downloader.sh

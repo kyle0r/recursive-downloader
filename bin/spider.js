@@ -104,7 +104,7 @@
  * 
  * for each uri in uris array, call spider method
  *   get HEAD uri
- *   if html
+ *   if contentType html
  *     GET uri
  *     extract a.hrefs to hrefs array
  *     for each href in hrefs array
@@ -115,13 +115,23 @@
  *     append uri to actualDownloads
  *     checkPending() - recursively call spider method if pendingUris remain
  *  
- *  finally, set a ==CUT== point for the calling script
- *  output aria2c download specification of the actualDownloads, to be used by
- *  the calling script
+ * finally, set a ==CUT== point for the calling script
+ * output aria2 download manifest of the actualDownloads, to be used by
+ * the calling script
  * 
- *  NOTES
- *  casperjs has getCurrentUrl method, which returns a url-decoded url, might be useful
- *  cite: https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#getcurrenturl
+ * NOTES
+ * casperjs has getCurrentUrl method, which returns a url-decoded url, might be
+ * useful cite: https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#getcurrenturl
+ *
+ * Regarding:
+ * [warning] [phantom] Loading resource failed with status=fail (HTTP 200)
+ * For the scripts use case these warning can be ignored. You'll notice a
+ * pattern that the warnings only appear for URI's that are not a text based
+ * contentType. 
+ * The warning appears to be related to the QtWebKit/PhantomJS code and how they
+ * handle HTTP contentType response header. For the use case in this script the
+ * warnings can be ignored because we only call HTTP HEAD method on non text
+ * contentType's. Further reading: https://stackoverflow.com/a/38460907
  *
  *
  *   ██████  █████  ███████ ██████  ███████ ██████       ██ ███████ 
@@ -143,7 +153,7 @@
  *
  * To be honest, in retrospect I wish I had not chosen a JavaScript-based
  * language for this script. I guess I've been disappointed by the limitations
- * of the Casper runtime.
+ * of the CasperJS / JavaScript runtime.
  * 
  * For example, I just shake my head at the complexity of the comments in this
  * Q&A: https://stackoverflow.com/a/16053538/490487 regarding [].forEach.call()
@@ -164,6 +174,7 @@
  * 
  * https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html
  * https://phantomjs.org/api/webpage/
+ * https://stackoverflow.com/a/20953499 # decent CasperJS boilerplate
  * https://stackoverflow.com/questions/23033856/casper-js-run-method-firing-early
  * https://stackoverflow.com/questions/27176651/how-to-make-casperjs-wait-until-change-event-is-finished
  * https://stackoverflow.com/questions/22163583/how-to-wait-for-page-loading-when-using-casperjs
@@ -232,14 +243,40 @@ var fs = require('fs');
 var uriParser = require('url-parse'); // << WORKS
 // what is url origin? https://url.spec.whatwg.org/#concept-url-origin
 
-var configPath='./config.yaml';
+// used in this script to access env vars
+var system = require('system');
+
+if (system.env['DEBUG']) DEBUG = true;
+
+// handle path topics
+var cwd = fs.absolute('.');
+var HOME = system.env['HOME'];
+
+if (!HOME || false === fs.isAbsolute(HOME)) {
+  console.log('env var HOME was not set OR is not an absolute path.');
+  console.log('spider.js relies on HOME env being set to the absolute path of the current users home directory. Aborting.'); 
+  phantom.exit(1);
+}
+
+if (false === fs.exists(cwd+'/node_modules') ) {
+  console.log('node_modules could not be found in the cwd. Aborting.');
+  phantom.exit(1);
+}
+
+var configFile='./config.yaml';
+// override configFile if CONFIG_FILE env is set
+if (system.env['CONFIG_FILE']) {
+  configFile = system.env['CONFIG_FILE'];
+}
+console.log('configFile: ', configFile);
 //var YAML = require('yaml'); // did not work in casperjs runtime
 try {
   var YAML = require('js-yaml');
-  var config = YAML.load(fs.read(configPath, { mode: 'r', charset: 'utf8' }));
+  var config = YAML.load(fs.read(configFile, { mode: 'r', charset: 'utf8' }));
 } catch (err) {
-  console.log('something went wrong trying to open/read config yaml:', configPath)
-  console.log('caught:', err);
+  console.log('Caught:', err);
+  console.log('Something went wrong trying to open/read config yaml:', configFile);
+  console.log('Aborting.');
   phantom.exit(1);
 }
 
@@ -253,6 +290,17 @@ if ('undefined' !== typeof config.uriBlacklist && config.uriBlacklist && Array =
   }, uriBlacklist);
   // ^^ note the last arg: https://stackoverflow.com/a/12482991/490487
 }
+
+var uriPathBlacklist = []
+if ('undefined' !== typeof config.uriPathBlacklist && config.uriPathBlacklist && Array === config.uriPathBlacklist.constructor) {
+  uriPathBlacklist = config.uriPathBlacklist;
+  // regex array of path+query to ignore/blacklist
+  uriPathBlacklist.forEach(function(value, index) {
+    this[index] = new RegExp(value, 'i');
+  }, uriPathBlacklist);
+  // ^^ note the last arg: https://stackoverflow.com/a/12482991/490487
+}
+
 // TODO support both a domain black and whitelist
 // IMPORTANT, the current implementation only checks uri.host not the full uri.href, this is by design
 var domainWhitelist = []
@@ -265,12 +313,37 @@ if ('undefined' !== typeof config.domainWhitelist && config.domainWhitelist && A
   // ^^ note the last arg: https://stackoverflow.com/a/12482991/490487
 }
 
+// override config.uriFile if URI_FILE env is set
+if (system.env['URI_FILE']) {
+  config.uriFile = system.env['URI_FILE'];
+}
+
+/* 
+ * replace tilde (~) with a given replacement, e.g. absolute path to home dir
+ * regex logic:
+ * assert that the string starts with a tilde: ^~
+ * start a positive lookahead (non consuming) to assert one of the following:
+ *  the end of the string: $
+ *  OR a forward slash: /
+ *  OR a back slash: \
+ * 
+ * ~ will match
+ * ~/blah will match
+ * ~something will not match
+ * example: https://regex101.com/r/NRhwqa/1
+*/
+function pathTildeDecode(path, replacement) {
+  return path.replace(/^~(?=$|\/|\\)/, replacement);
+}
+
+config.uriFile = pathTildeDecode(config.uriFile, HOME);
+
 // FIXME validation on the uris, encoding, etc, is phantomjs/casperjs/aria2c sensitive to unencoded uris?
 try {
   var stream = fs.open(config.uriFile, { mode: 'r', charset: 'utf8' });
   var uris = [];
   while(!stream.atEnd()) {
-      uris.push(uriParser(stream.readLine()));
+      uris.push(uriParser(stream.readLine(), {}));
   }
 } catch (err) {
   console.log('something went wrong trying to open/read uris file:', config.uriFile)
@@ -283,14 +356,29 @@ try {
   if (stream) stream.close();
 }
 
-// used in this script to access env vars
-var system = require('system');
+// https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#index-1
+// https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#pagesettings
+var casperConfig = {
+  verbose: false
+  ,logLevel: 'error'
+  ,viewportSize: {
+    width: 1024
+    ,height: 768
+  }
+  ,pageSettings: {
+    "loadImages": false
+    ,"loadPlugins": false
+    ,"webSecurityEnabled": false
+    ,"javascriptEnabled": true
+
+  }
+}
 
 if (DEBUG) {
-  var casper = require('casper').create({ verbose: true, logLevel: 'debug' });
-} else {
-  var casper = require('casper').create();
+  casperConfig.verbose = true;
+  casperConfig.logLevel = 'debug';
 }
+var casper = require('casper').create(casperConfig);
 
 // uri variables
 var visitedUris = [], pendingUris = [], actualDownloads = [];
@@ -314,12 +402,14 @@ function spider() {
   counterConcurrentSpiderCalls++;
   console.log('counterConcurrentSpiderCalls:', counterConcurrentSpiderCalls);
   var myUri = pendingUris.shift();
-  casper.echo(casper.colorizer.format('<- Shifted ' + myUri.href + ' off the stack', { fg: 'blue' }));
+  casper.echo( casper.colorizer.format('<- Shifted ' + myUri.href + ' off the stack', { fg: 'blue' }) );
   // I had to implment the next two if statements because returning
   // from this function returned out of the whole stack back to the orign
   // caller. Not sure if that is a JavaScript feature?
-  if (false === isInArray(myUri.href, visitedUris)) {
-    if (domainWhitelist.some(function(rx) { return rx.test(myUri.host); }) ) {
+  if ( false === isInArray(myUri.href, visitedUris) ) {
+    // TODO should uriBlacklist && uriPathBlacklist be checked here too?
+    // Current logic: the assumption is that the URI's in the uriFile do not need to be compared to the blacklists
+    if ( true === domainWhitelist.some(function(rx) { return rx.test(myUri.host); }) ) {
       // fetch HEAD myUri i.e. don't download, get info first
       casper.open(myUri.href, { method: 'head' }).then(function(response) {
         console.log('START HEAD OPEN')
@@ -328,7 +418,7 @@ function spider() {
         if (DEBUG) console.log(JSON.stringify(response, null, 2))
 
         // logic for html URI's
-        if (textHtmlRegEx.test(response.contentType)) {
+        if (200 == response.status && textHtmlRegEx.test(response.contentType)) {
           console.log('matched content type:', response.url, 'contentType: ', response.contentType);
 
           // GET the html page
@@ -349,40 +439,67 @@ function spider() {
               return arr;
             });
 
-            // for each href, for each uriBlacklist regex (rx), negative test the href, if OK append to pendingUris
-            // needed to revent to for () loop to be able to use "continue"
             var hrefsLength = hrefs.length;
+            if (DEBUG) console.log ('hrefsLength:', hrefsLength);
+            // for each href, for each uriBlacklist regex (rx), negative test the href, if OK append to pendingUris
+            // Had to revert to a for () loop to be able to use "continue"
             for (var i=0; i < hrefsLength; i++) {
-              var href = hrefs[i];
-              // IMPORTANT: at this point we are dealing with the raw a.href, so it can be relative or absolute
+              var rawHref = hrefs[i];
+              // Handle URI's that skip the protocol and begin with // aka scheme-relative-URL
+              // ref: https://stackoverflow.com/a/3583129
+              // ref: https://url.spec.whatwg.org/#scheme-relative-url-string
+              var protocolPrefix = (rawHref.match(/^\/\//)) ? myUri.protocol : '';
+              
+              // Parse the href - use baseURL={} rather than default: baseURL=location
+              // We want to ignore the value of location
+              // ref: https://www.npmjs.com/package/url-parse#usage
+              var href = uriParser(protocolPrefix+rawHref, {});
+              href.rawHref = rawHref;
+              href.wasRelative = (!href.host) ? true : false;
+              // for relative hrefs, we want to ensure the rawHref is evaluated
+              var uriPathBlacklistTest = (href.wasRelative) ? href.rawHref : href.pathname+href.query+href.hash;
+
+              // Handle relative hrefs
+              if (href.wasRelative) {
+                // for relative hrefs we pass baseURL=response.url, this converts the href from relative to absolute
+                var href = uriParser(rawHref, response.url);
+                href.wasRelative = true;
+                href.rawHref = rawHref;
+              }
+              // IMPORTANT for consistency, the logic is to ensure that href.href is always absolute, href.rawHref stores the original raw href
+
+              if (DEBUG) console.log('wasRelative:', href.wasRelative, 'raw href:', href.rawHref, 'parsed href:', href.href)
+
               // Note: .some tests whether at least one element in the array passes the test implemented by the provided function.
-              // Therefore, all regex patterns in uriBlacklist must be non-matching (false) in order for a href to be append to pendingUris
+              // Therefore, all regex patterns in uriBlacklist must be non-matching (false) in order for a href to be appended to pendingUris
               // Any href that matches a pattern we want to skip
-              if (! uriBlacklist.some(function(rx) { return rx.test(href); }) ) {
-                var tmpHref = uriParser(href);
-                if (! tmpHref.host) { // relative
-                  href = uriParser(href, response.url); // for relative hrefs
-                } else { // absolute
-                  href = tmpHref;
-                  // check domainWhitelist
-                  if (! domainWhitelist.every(function(rx) { return rx.test(href.host); }) ) {
-                    console.log('skip pending append, not on domain whitelist:', href.host);
+              if ( false === uriBlacklist.some(function(rx) { return rx.test(href.href); }) ) {
+                if ( false === uriPathBlacklist.some(function(rx) { return rx.test(uriPathBlacklistTest); }) ) {
+                  if (false === href.wasRelative) {
+                    // check domainWhitelist, if .some === false then the domain was not whitelisted 
+                    if ( false === domainWhitelist.some(function(rx) { return rx.test(href.host); }) ) {
+                      if (DEBUG) console.log('skip pending append, not on domain whitelist:', href.host);
+                      continue;
+                    }
+                  }
+                  
+                  // skip if already pending, probably cheaper than checking visitedUris first, as a rule its a shorter list
+                  if ( pendingUris.some(function(element) { return element.href === href.href; }) ) {
+                    if (DEBUG) console.log('skip pending append, already pending:', href.href);
                     continue;
                   }
+                  // skip if visitied
+                  if (true === isInArray(href.href, visitedUris)) {
+                    if (DEBUG) console.log('skip pending append, already visited:', href.href);
+                    continue;
+                  }
+                  pendingUris.push(href);
+                  casper.echo(casper.colorizer.format('-> Pushed ' + href.href + ' to the stack', { fg: 'blue' }));
+                } else {
+                  if (DEBUG) console.log('skip pending append, href matches uriPathBlacklist:', href.href);
                 }
-                // IMPORTANT href.href is now absolute
-                // skip if already pending, probably cheaper than checking visitedUris first, as a rule its a shorter list
-                if ( pendingUris.some(function(element) { return element.href === href.href; }) ) {
-                  console.log('skip pending append, already pending:', href.href);
-                  continue;
-                }
-                // skip if visitied
-                if (true === isInArray(href.href, visitedUris)) {
-                  console.log('skip pending append, already visited:', href.href);
-                  continue;
-                }
-                pendingUris.push(href);
-                casper.echo(casper.colorizer.format('-> Pushed ' + href.href + ' to the stack', { fg: 'blue' }));
+              } else {
+                if (DEBUG) console.log('skip pending append, href matches uriBlacklist:', href.href);
               }
             };
 
@@ -391,9 +508,11 @@ function spider() {
           }); // end casper.open GET
         // catch all logic for any other content type, if not html the script will append to actualDownloads array
         } else {
-          // TODO should the uriBlacklist be checked here too?
-          this.echo(this.colorizer.format('Actual Download: '+ response.url, { fg: 'green' }));
-          actualDownloads.push(myUri);
+          if (200 == response.status) {
+            // TODO should the uriBlacklist be checked here too?
+            this.echo(this.colorizer.format('Actual Download: '+ response.url, { fg: 'green' }));
+            actualDownloads.push(myUri);
+          }
           checkPending();
         }
         console.log('END HEAD OPEN')
@@ -427,16 +546,53 @@ function checkPending() {
 // spider the uris
 casper.start().eachThen(uris, function(response) {
   console.log('CASPER START ITERATOR')
-  if ('undefined' !== typeof config.username) {
-    config.http_pw = system.env['spider_pw'];
-    casper.setHttpAuth(config.username, config.http_pw);
+  // setHttpAuth if present in env
+  config.httpUser = ('undefined' !== typeof system.env['HTTP_USER'] && system.env['HTTP_USER']) ? system.env['HTTP_USER'] : false;
+  config.httpPass = ('undefined' !== typeof system.env['HTTP_PW'] && system.env['HTTP_PW']) ? system.env['HTTP_PW'] : false;
+  if (false !== config.httpUser && false !== config.httpPass) {
+    casper.setHttpAuth(config.httpUser, config.httpPass);
   }
 
-  var uri = uriParser(response.data);
+  var uri = uriParser(response.data, {});
   // TODO opportunity to perform some URI validation here, well formed, absolute, any uriParser exceptions?
   pendingUris.push(uri);
   casper.echo(casper.colorizer.format('-> Pushed ' + uri.href + ' to the stack', { fg: 'blue' }));
   if (DEBUG) console.log(JSON.stringify(uri, null, 2))
+
+  /*  
+   * TODO Research what does the call stack look like when spider() processes
+   * recursively?
+   * TODO Investigate what is the memory usage like?
+   * TODO Research if the call stack remains linear due to async function calls?
+   * Note how 'SPIDER END' is output sequentially
+   * If the code was fully synchronous, you would expect a nested call stack and
+   * each SPIDER END to be output at the end of the script?
+   * However, SPIDER END is consistently output just before each:
+   * [info] [phantom] Step anonymous X/X: done
+   * This would suggest that each spider call ends around the same time as the
+   * next recursive call?
+   * This would suggest that the spider() sub-calls to casper.open() are
+   * effectively making spider() asynchronous.
+   * TODO I assume this is good news for memory usage?
+   *
+   * My observation is that the recursive nature of spider calling itself
+   * provides the required sequentially/synchronicity even though some
+   * sub-calls are asynchronous.
+   *
+   * Note that END HEAD OPEN is logged directly after START HEAD OPEN but in the
+   * code there is a bunch of logic that is designed to be synchronus, so this
+   * strongly suggests the casper.open method is async.
+   * The nested casper.open() is logged with START GET OPEN
+   * The SPIDER END is consistently logged before END GET OPEN
+   *
+   * INFO I'm pretty sure I tried logic: while (pendingUris.length > 0) spider()
+   * which didn't work because of the async casper.open() sub-calls inside 
+   * spider() effectively made the while loop asynchronous.
+   * i.e. the while loop didn't wait for a loop iteration to finish before
+   * starting the next loop iteration.
+   */
+
+  // call spider(), which will call itself recursively until all URI's have been evaluated
   spider();
   console.log('CASPER START END ITERATOR\n');
 });

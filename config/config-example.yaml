@@ -1,31 +1,36 @@
 # A txt file list of URI's to download recursively, one per line
-uriFile: ./uris.txt
-
-# Blank/comment this to skip http basic auth
-username: example-username
+uriFile: ~/spider-uris.txt
 
 # URI's that match these regex patterns will be blacklisted
+# Note the default blacklists all protocols except https
 uriBlacklist:
-  - '^(http|ftp|sftp|file|ws|wss|urn)://' # customise this to your requirements
-  - '^\?' # blacklist relative URI's starting with ? (query strings)
-  - '^\/' # blacklist relative URI's starting with a forward slash
+  - '^(http|ftp|sftp|file|ws|wss|urn):\/\/' # customise this to your requirements
   - '^blob:' # blacklist blob URI's
   - 'javascript:' # blacklist javascript URI's
+
+# facilitates blacklisting URI paths, a path consists of pathname+query+hash
+uriPathBlacklist:
+#  - '^\?' # blacklist relative URI's starting with ? (query strings)
+#  - '^\/' # blacklist relative URI's starting with a forward slash
 
 # Domain whitelist: matches on uri.host, supports regex, port can be included.
 # WARNING: if you don't use whitelisting, spider.js will keep crawling until it
 # runs out of a.hrefs, hypothetically this could be a very large number of web 
 # pages and a lot of network traffic. Please use responsibly.
+# Your ISP and/or other providers may block abusive IP addresses, where the rate
+# and/or volume of requests is very high.
 domainWhitelist:
-  - 'sub.domain.tld'
-  - 'domain2.tld'
+  - 'sub\.domain\.tld'
+  - 'domain2\.tld'
 
 # You can strip paths if you wish, this will affect the locally created path
 # structure. i.e. the specified string will be removed from the local path.
-# Blank/comment this if you don't need it
-uriStripPaths: '/strip/these/paths/'
+# Blank/comment uriStripPaths if you don't need it
+#uriStripPaths: '/strip/these/paths/'
 
-# Local path where downloads should be placed, relative or absolute.
-# This will be appended to uri.pathname in local paths.
-# Blank/comment this and only the uri.pathname will be used.
-downloadPath: '../' 
+# downloadPath defines the relative or absolute local path where downloads
+# should be stored. Defaults to dot slash (./) - the current working dir.
+# In the generated aria2 download specification, the local save/output path
+# consists of: config.downloadPath+uri.pathname
+# Blank/comment downloadPath and only the uri.pathname will be used.
+downloadPath: './'

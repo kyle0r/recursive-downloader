@@ -1,3 +1,5 @@
+/* jshint devel: true, node: true */
+/* globals phantom, __utils__ */
 'use strict';
 /*
  * 
@@ -281,7 +283,7 @@ try {
 }
 
 // TODO support both uri black and whitelist e.g. config.uriFilter.Blacklist|Whitelist
-var uriBlacklist = []
+var uriBlacklist = [];
 if ('undefined' !== typeof config.uriBlacklist && config.uriBlacklist && Array === config.uriBlacklist.constructor) {
   uriBlacklist = config.uriBlacklist;
   // regex array of URI's to ignore/blacklist
@@ -291,7 +293,7 @@ if ('undefined' !== typeof config.uriBlacklist && config.uriBlacklist && Array =
   // ^^ note the last arg: https://stackoverflow.com/a/12482991/490487
 }
 
-var uriPathBlacklist = []
+var uriPathBlacklist = [];
 if ('undefined' !== typeof config.uriPathBlacklist && config.uriPathBlacklist && Array === config.uriPathBlacklist.constructor) {
   uriPathBlacklist = config.uriPathBlacklist;
   // regex array of path+query to ignore/blacklist
@@ -303,7 +305,7 @@ if ('undefined' !== typeof config.uriPathBlacklist && config.uriPathBlacklist &&
 
 // TODO support both a domain black and whitelist
 // IMPORTANT, the current implementation only checks uri.host not the full uri.href, this is by design
-var domainWhitelist = []
+var domainWhitelist = [];
 if ('undefined' !== typeof config.domainWhitelist && config.domainWhitelist && Array === config.domainWhitelist.constructor) {
   domainWhitelist = config.domainWhitelist;
   // regex array of domains to whitelist 
@@ -346,7 +348,7 @@ try {
       uris.push(uriParser(stream.readLine(), {}));
   }
 } catch (err) {
-  console.log('something went wrong trying to open/read uris file:', config.uriFile)
+  console.log('something went wrong trying to open/read uris file:', config.uriFile);
   console.log('caught:', err);
   console.log('closing stream if defined');
   if (stream) stream.close();
@@ -359,20 +361,20 @@ try {
 // https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#index-1
 // https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#pagesettings
 var casperConfig = {
-  verbose: false
-  ,logLevel: 'error'
-  ,viewportSize: {
-    width: 1024
-    ,height: 768
-  }
-  ,pageSettings: {
-    "loadImages": false
-    ,"loadPlugins": false
-    ,"webSecurityEnabled": false
-    ,"javascriptEnabled": true
+  verbose: false,
+  logLevel: 'error',
+  viewportSize: {
+    width: 1024,
+    height: 768
+  },
+  pageSettings: {
+    "loadImages": false,
+    "loadPlugins": false,
+    "webSecurityEnabled": false,
+    "javascriptEnabled": true
 
   }
-}
+};
 
 if (DEBUG) {
   casperConfig.verbose = true;
@@ -381,7 +383,10 @@ if (DEBUG) {
 var casper = require('casper').create(casperConfig);
 
 // uri variables
-var visitedUris = [], pendingUris = [], actualDownloads = [];
+// visitedUris is a simple list of URI strings
+var visitedUris = [];
+// pendingUris and actualDownloads are lists of parsed URI objects
+var pendingUris = [], actualDownloads = [];
 // IDEA could create a skippedUris? could the array indexOf be cheaper .some regex? would need a benchmark.
 
 // regex to detect HTML URI's
@@ -392,8 +397,18 @@ var maxSpiderRecursionDepth = 0;
 var counterConcurrentSpiderCalls = 0;
 
 // cite: https://stackoverflow.com/a/18101063/490487
-function isInArray(value, array) {
+function isInArray(array, value) {
   return array.indexOf(value) > -1;
+}
+
+// At least one of the RegEx patterns in array should match searchValue
+function valueMatchesAtLeastOnePattern(array, searchValue) {
+  return array.some(function(regex) { return regex.test(searchValue); });
+}
+
+// At least one of the href's in array should be identical to href
+function arrayContainsHref(array, href){
+  return array.some(function(element) { return element.href === href; });
 }
 
 // the main logic function, called recursively
@@ -406,16 +421,16 @@ function spider() {
   // I had to implment the next two if statements because returning
   // from this function returned out of the whole stack back to the orign
   // caller. Not sure if that is a JavaScript feature?
-  if ( false === isInArray(myUri.href, visitedUris) ) {
+  if ( false === isInArray(visitedUris, myUri.href) ) {
     // TODO should uriBlacklist && uriPathBlacklist be checked here too?
     // Current logic: the assumption is that the URI's in the uriFile do not need to be compared to the blacklists
-    if ( true === domainWhitelist.some(function(rx) { return rx.test(myUri.host); }) ) {
+    if ( true === valueMatchesAtLeastOnePattern(domainWhitelist, myUri.host) ) {
       // fetch HEAD myUri i.e. don't download, get info first
       casper.open(myUri.href, { method: 'head' }).then(function(response) {
-        console.log('START HEAD OPEN')
-        visitedUris.push(response.url)
+        console.log('START HEAD OPEN');
+        visitedUris.push(response.url);
         console.log('Opened:', response.url, 'contentType:', response.contentType, 'http status code:', response.status);
-        if (DEBUG) console.log(JSON.stringify(response, null, 2))
+        if (DEBUG) console.log(JSON.stringify(response, null, 2));
 
         // logic for html URI's
         if (200 == response.status && textHtmlRegEx.test(response.contentType)) {
@@ -462,34 +477,34 @@ function spider() {
               // Handle relative hrefs
               if (href.wasRelative) {
                 // for relative hrefs we pass baseURL=response.url, this converts the href from relative to absolute
-                var href = uriParser(rawHref, response.url);
+                href = uriParser(rawHref, response.url);
                 href.wasRelative = true;
                 href.rawHref = rawHref;
               }
               // IMPORTANT for consistency, the logic is to ensure that href.href is always absolute, href.rawHref stores the original raw href
 
-              if (DEBUG) console.log('wasRelative:', href.wasRelative, 'raw href:', href.rawHref, 'parsed href:', href.href)
+              if (DEBUG) console.log('wasRelative:', href.wasRelative, 'raw href:', href.rawHref, 'parsed href:', href.href);
 
-              // Note: .some tests whether at least one element in the array passes the test implemented by the provided function.
-              // Therefore, all regex patterns in uriBlacklist must be non-matching (false) in order for a href to be appended to pendingUris
-              // Any href that matches a pattern we want to skip
-              if ( false === uriBlacklist.some(function(rx) { return rx.test(href.href); }) ) {
-                if ( false === uriPathBlacklist.some(function(rx) { return rx.test(uriPathBlacklistTest); }) ) {
+              // Any href that matches the uriBlacklist we want to skip
+              if ( false === valueMatchesAtLeastOnePattern(uriBlacklist, href.href) ) {
+                // Any path that matches uriPathBlacklist we want to skip
+                if ( false === valueMatchesAtLeastOnePattern(uriPathBlacklist, uriPathBlacklistTest) ) {
+                  // only check the domainWhitelist for absolue URI's
                   if (false === href.wasRelative) {
-                    // check domainWhitelist, if .some === false then the domain was not whitelisted 
-                    if ( false === domainWhitelist.some(function(rx) { return rx.test(href.host); }) ) {
+                    // Any domain not in the domainWhitelist we want to skip 
+                    if ( false === valueMatchesAtLeastOnePattern(domainWhitelist, href.host) ) {
                       if (DEBUG) console.log('skip pending append, not on domain whitelist:', href.host);
                       continue;
                     }
                   }
                   
                   // skip if already pending, probably cheaper than checking visitedUris first, as a rule its a shorter list
-                  if ( pendingUris.some(function(element) { return element.href === href.href; }) ) {
+                  if ( true === arrayContainsHref(pendingUris, href.href) ) {
                     if (DEBUG) console.log('skip pending append, already pending:', href.href);
                     continue;
                   }
                   // skip if visitied
-                  if (true === isInArray(href.href, visitedUris)) {
+                  if (true === isInArray(visitedUris, href.href)) {
                     if (DEBUG) console.log('skip pending append, already visited:', href.href);
                     continue;
                   }
@@ -501,7 +516,7 @@ function spider() {
               } else {
                 if (DEBUG) console.log('skip pending append, href matches uriBlacklist:', href.href);
               }
-            };
+            }
 
             checkPending();
             console.log('END GET OPEN'); 
@@ -515,7 +530,7 @@ function spider() {
           }
           checkPending();
         }
-        console.log('END HEAD OPEN')
+        console.log('END HEAD OPEN');
       }); // end casper.open HEAD
     } else { // domain whitelist else
       console.log('skipping not in domain whitelist:', myUri.href);
@@ -545,7 +560,7 @@ function checkPending() {
 // for each each uri, current item will be stored in the response.data property
 // spider the uris
 casper.start().eachThen(uris, function(response) {
-  console.log('CASPER START ITERATOR')
+  console.log('CASPER START ITERATOR');
   // setHttpAuth if present in env
   config.httpUser = ('undefined' !== typeof system.env['HTTP_USER'] && system.env['HTTP_USER']) ? system.env['HTTP_USER'] : false;
   config.httpPass = ('undefined' !== typeof system.env['HTTP_PW'] && system.env['HTTP_PW']) ? system.env['HTTP_PW'] : false;
@@ -557,7 +572,7 @@ casper.start().eachThen(uris, function(response) {
   // TODO opportunity to perform some URI validation here, well formed, absolute, any uriParser exceptions?
   pendingUris.push(uri);
   casper.echo(casper.colorizer.format('-> Pushed ' + uri.href + ' to the stack', { fg: 'blue' }));
-  if (DEBUG) console.log(JSON.stringify(uri, null, 2))
+  if (DEBUG) console.log(JSON.stringify(uri, null, 2));
 
   /*  
    * TODO Research what does the call stack look like when spider() processes
@@ -578,10 +593,11 @@ casper.start().eachThen(uris, function(response) {
    * My observation is that the recursive nature of spider calling itself
    * provides the required sequentially/synchronicity even though some
    * sub-calls are asynchronous.
+   * Note how counterConcurrentSpiderCalls remains 1
    *
    * Note that END HEAD OPEN is logged directly after START HEAD OPEN but in the
    * code there is a bunch of logic that is designed to be synchronus, so this
-   * strongly suggests the casper.open method is async.
+   * strongly suggests the casper.open() method is async.
    * The nested casper.open() is logged with START GET OPEN
    * The SPIDER END is consistently logged before END GET OPEN
    *

@@ -1,0 +1,17 @@
+seqdiag {
+  cli  -> bash [label = "recursive-downloader.sh"];
+  bash -> "$EDITOR" [label = "$EDITOR $URI_FILE"];
+  bash <- "$EDITOR";
+  bash -> "node CasperJS" [label = "casperjs.js spider.js"];
+  "node CasperJS" -> "node CasperJS" [label = "bootstrap.js"];
+  "node CasperJS" -> "node PhantomJS" [label = "phantom.injectJs(phantom.casperScript)"];
+  "node PhantomJS" -> webserver [label = "spider"];
+  "node PhantomJS" <- webserver;
+  "node CasperJS" <- "node PhantomJS";
+  bash <- "node CasperJS" [label = "downloads manifest"];
+  bash -> "$EDITOR" [label = "$EDITOR $aria_downloads_manifest"];
+  bash <- "$EDITOR";
+  bash -> aria2c [label = "aria2c $aria_downloads_manifest"];
+  aria2c -> webserver [label = "GET"];
+  aria2c <- webserver [label = "download"];
+}

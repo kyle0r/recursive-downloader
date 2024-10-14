@@ -1,26 +1,34 @@
 #!/bin/bash
 
+# This script was developed on Debian.
+# The majority of this script should be POSIX compliant. 
+
+#  pipefail is primarily a bash feature, which is the main reason for using bash
+#+ rather than sh in this script.
+#+ https://manpages.debian.org/stable/bash/bash.1.en.html#pipefail
+#+ A future version of Debian shell (dash) should support pipefail see:
+#+ https://stackoverflow.com/a/78501655/490487
+#+ In the future, the script could be tested with dash supporting pipefail and
+#+ become POSIX compliant.
 set -o pipefail
 
-version='2024.24.1'
-#  version convention: DIN ISO 8601 date +%G\.%V\.1 (YEAR.WEEK.RELEASE)
+version=2024.42.1
+#  version convention: YEAR.WEEK.RELEASE - date +'%G.%V.1'
 #+ where 1 is incremented per release within the given week
 
 me="${0##*/}" # basename
 me="${me%.sh}" # strip .sh suffix
 print_version() { printf "%s version: %s\n" "$me" "$version"; }
 
-print_version 1>&2
-
 : <<CHANGELOG
 2012-11-23 - version 2012.47.1
 * Script was born, early logic parsed wget log to create aria2c download
-manifest and start aria2c.
+  manifest and start aria2c.
 
 2013-03-12 - version 2013.11.1
 * Script was refined and fully interactive. User prompted to paste URI's, wget
-is then called, wget log is parsed, user prompted to view/edit download
-manifest, and then start or abort the download with aria2c.
+  is then called, wget log is parsed, user prompted to view/edit download
+  manifest, and then start or abort the download with aria2c.
 
 2017-01-03 - version 2017.01.1
 * Script checked with shellcheck and refined, improved structure and code docs.
@@ -35,13 +43,36 @@ Script updated to use spider.js (CasperJS) instead of wget
 * Removed redundant aria_working_path var - logic is handled by spider.js.
 * Logic to detect the $script_dir
 * spider.js is run in a subshell where the cwd is changed to $script_dir to
-ensure dependencies are available regardless of the cwd/pwd.
+  ensure dependencies are available regardless of the cwd/pwd.
 * Implemented basic exit status handling for spider.js command
 * aria2 min-tls-version, enable-rpc and rpc-listen-port are now variables
 * HTTP basic auth is now optional by default
 * HTTP_USER is no longer stored in the script and must be provided via env var
 * Added dependency checks
 * Setting the PhantomJS and CasperJS bin PATH's early on
+
+2024-10-14 - version 2024.42.1
+* Added information on the bash pipefile option
+* Added a note on POSIX compliance
+* Improved definition of the version convention
+* Changed most internal variables to env vars
+* Fixed some problems with tilde expansion
+* Changed PATH modification to preprend rather than append
+* Improved validation that CONFIG_FILE and URI_FILE are set and not empty,
+  otherwise use defaults
+* Renamed __toupper() function to toupper()
+* Added scroll_up() function
+* Updated the terminate() function, it now uses the systems kill command (binary
+  not shell builtin) to kill the process group.
+* Added node and nodejs commands to dependency checks
+* The script now prints its runtime configuration on startup and checks that
+  each variable has a non-empty value.
+* Updated the invocation of spider.js to use its #! defined interpreter
+  (casperjs.js) which uses node. This removes the dependency on the CasperJS
+  Python startup wrapper.
+* Blank lines in spider.js output are now removed.
+* Added an INFO block regarding a possible future enhancement to replace the
+  shell process with aria2c via exec.
 CHANGELOG
 
 
@@ -50,15 +81,22 @@ CHANGELOG
 min_tls_version=TLSv1.2
 enable_rpc=false
 rpc_listen_port=6800
-max_connections_per_server=10
-max_concurrent_downloads=1
-split=10
-#  ^^ max_connections_per_server=10 max_concurrent_downloads=1 split=10
-#+ download one at a time, split/multi-thread up to 10 connections per download
+
+: "${MAX_CONCURRENT_DOWNLOADS:=1}"
+: "${MAX_CONNECTIONS_PER_SERVER:=10}"
+: "${SPLIT:=10}"
+#  ^^ MAX_CONCURRENT_DOWNLOADS=1 MAX_CONNECTIONS_PER_SERVER=10 SPLIT=10
+#+ download max one URI at a time, split/multi-thread up to 10 connections per
+#+ download.
+
+# Relates to the aria2 --dry-run feature, does not change spider.js behaviour
 dry_run=false
-download_limit=0
+
+# Set the aria2 --max-overall-download-limit option
+: "${DOWNLOAD_LIMIT:=0}"
+
 # http basic auth credentials
-# TODO make a http request to test credentials?
+# TODO make a http request to test credentials prior to execuing spider.js?
 if [ -n "$HTTP_USER" ] && [ -z "$HTTP_PW" ]; then
   read -rp "enter http password (no echo): " -s HTTP_PW ; echo
   export HTTP_PW
@@ -67,13 +105,15 @@ fi
 #  TODO InfoSec: write a aria2c config to temp file, to mitigate credentials
 #+ appearing in the process list
 
-# set a default if EDITOR is not set
+# Set a default if EDITOR is not set
+# TODO upgrade this logic to the example in install.sh
 : "${EDITOR:=vim}"
 
-# set a default if URI_FILE is not set
-: "${URI_FILE:=$HOME/spider-uris.txt}"
-# used as an override in spider.js to specify file with URI's
-export URI_FILE
+# Set a default if URI_FILE is not set
+# URI_FILE is used by spider.js to specify the file containing URIs
+#+ Note: It is not possible to use tilde expansion within quoted brace
+#+ expansion, hence this approach.
+[ -z "${URI_FILE+x}" ] && export URI_FILE=~/spider-uris.txt
 
 #  A POSIX compliant approach to get the canonicalised dirname
 #+ i.e. the absolute physical path to the current scripts pwd
@@ -84,40 +124,64 @@ fi
 
 [ -d "${script_dir}/node_modules/casperjs" ] || die 'Unable to detect CasperJS installation. Aborting.'
 
-PATH=$PATH:${script_dir}/node_modules/phantomjs-prebuilt/bin:${script_dir}/node_modules/casperjs/bin
+# Update the PATH so that the shell can find the commands.
+PATH=${script_dir}/node_modules/phantomjs-prebuilt/bin:${script_dir}/node_modules/casperjs/bin:${PATH}
 
+# Set default config file env var if not set
+#+ Note: It is not possible to use tilde expansion within quoted brace
+#+ expansion, hence this approach.
+# Note: the ~/ cannot be quoted or tilde expansion will fail
+[ -z "${CONFIG_FILE+x}" ] && export CONFIG_FILE=~/".config/${me}/config.yaml"
 
 ######################################################################
 # START functions
 
 # upper case a string
-__toupper() { tr '[:lower:]' '[:upper:]'; } # this works with pipe
-# handy pause functions
-function pause() { read -rp "$*" -n1; }
-function generic_pause() { pause 'Press any key to continue...'; }
+toupper() { tr '[:lower:]' '[:upper:]'; } # this works with pipe
+# handy pause functions - not POSIX compliant
+pause() { read -rp "$*" -n1; }
+generic_pause() { pause 'Press any key to continue...'; }
 # complain to STDERR and exit with error
 die() { echo "$*" 1>&2; exit 2; }
+
+# https://askubuntu.com/a/997893
+# equivalent to keystroke CTRL+L
+scroll_up() {
+  printf '\33[H\33[2J'
+}
 
 
 ######################################################################
 # START validation of options, arguments and dependencies
 
-for dep in aria2c cat tac sed casperjs mktemp; do
+# FIXME 'which' is not POSIX
+# we require which to find the kill command not the shell builtin
+[ -x "$(command -v which)" ] || die "Command 'which' dependency not found. aborting."
+kill_path=$(which kill)
+
+# dependency checks
+for dep in "$kill_path" aria2c cat tac sed casperjs mktemp node nodejs; do
   [ -x "$(command -v "$dep")" ] || die "Command '$dep' dependency not found. Aborting."
 done
 
 
 ######################################################################
-# START trap
+# START trap logic
+
 terminate() {
-  trap '' TERM INT EXIT # ignore further signals
+  trap - TERM INT EXIT # ignore further signals
   printf "\n%s\n" "$me has been signaled to clean up and terminate..." 1>&2
+
+  # ensure temp file(s) are cleaned up
   #shellcheck disable=SC2066
   for tmp_file in "$aria_downloads_manifest"; do
     [ -e "$tmp_file" ] && { echo "removing temp file: $tmp_file" 1>&2; rm "$tmp_file"; }
   done
 
-  exit
+  # kill the process group -$$ 
+  # Try to kill any lingering procs spawned by this script 
+  # https://stackoverflow.com/a/2173421/490487
+  "$kill_path" -- -$$
 }
 
 # trap the following signals with terminate function
@@ -133,7 +197,34 @@ aria_downloads_manifest=$(mktemp /tmp/mktemp.XXXXXXX)
 ######################################################################
 # START main script
 
+scroll_up
+
+print_version 1>&2
+
 cat <<EOM
+
+Runtime configuration:
+DEBUG=$DEBUG
+EOM
+
+# check and print runtime config
+for envvar in EDITOR CONFIG_FILE URI_FILE DOWNLOAD_LIMIT MAX_CONCURRENT_DOWNLOADS MAX_CONNECTIONS_PER_SERVER SPLIT; do
+  if eval '[ -z "${'"$envvar"'+x}" ]'; then
+    die "$envvar is not set. Aborting."
+  else
+    code=$(cat <<CODE
+printf '%s=%s\n' "\$envvar" "\$$envvar"
+CODE
+)
+    eval "$code"
+    unset code
+  fi
+done
+unset envvar
+
+cat <<EOM
+
+---------------------------
 
 Your EDITOR ($EDITOR) will now open for URI input, one per line.
 
@@ -142,13 +233,11 @@ URI_FILE: $URI_FILE
 Save and exit the editor to continue.
 
 EOM
-
 generic_pause
 
 $EDITOR "$URI_FILE"
 
 cat <<EOM
-
 
 spider.js (CasperJS) will now spider the URI's
 
@@ -158,14 +247,19 @@ generic_pause
 # execute in a subshell, preserves the main script cwd/pwd
 (
   #  WHY? does $script_dir path NOT need to be escaped if it contains chars that
-  #+ would otherwise need to be escaped if the path was not stored in a variable?
+  #+ would otherwise need to be escaped if the path was not stored in a
+  #+ variable? This must be due to shell internal handling?
 
-  #  change dir to $script_dir - important that recursive-downloader can find
-  #+ to spider.js, and spider.js  has access to libs and configs etc
+  # cd to $script_dir - important that spider.js can find node_modules etc
   cd -- "$script_dir" || die "Could not change dir to script dir: $script_dir. Aborting."
 
-  if output=$(casperjs bin/spider.js); then
-    echo "$output" | tac | sed -n '/==CUT==/q;p' | tac > "$aria_downloads_manifest"
+  #  TODO consider splitting stdout and stderr into seperate variables
+  #+ https://stackoverflow.com/q/11027679
+  
+  # spider.js must be available on $PATH which is setup by install.sh
+  if output=$(spider.js 2>&1); then
+    # The sed removes blank lines and extracts the relevant output
+    echo "$output" | tac | sed -n '/^$/d;/==CUT==/q;p' | tac > "$aria_downloads_manifest"
   else
     die "
 
@@ -181,16 +275,28 @@ $output
 echo;echo
 echo -n "Would you like to view/edit the download manifest with $EDITOR before the download(s) start? [Y/n]? "
 read -r continue
-continue=$(echo "$continue" | __toupper)
+continue=$(echo "$continue" | toupper)
 if [ "N" != "$continue" ] && [ "NO" != "$continue" ]; then
+  unset continue
   $EDITOR "$aria_downloads_manifest"
 fi
-continue=
 
+echo
 echo -n "Would you like to start the download(s)? [Y/n]? "
 read -r continue
-continue=$(echo "$continue" | __toupper)
+continue=$(echo "$continue" | toupper)
 if [ "N" != "$continue" ] && [ "NO" != "$continue" ]; then
-  aria2c --dry-run="$dry_run" --disable-ipv6 --input-file="$aria_downloads_manifest" --http-auth-challenge=true --http-user="$HTTP_USER" --http-passwd="$HTTP_PW" --max-connection-per-server="$max_connections_per_server" --min-split-size=1M --max-overall-download-limit="$download_limit" --max-concurrent-downloads="$max_concurrent_downloads" --conditional-get=true --split="$split" --enable-rpc="$enable_rpc" --rpc-listen-port="$rpc_listen_port" --min-tls-version="$min_tls_version"
+  unset continue
+  : <<INFO
+  This is the end of the script. No further shell functionality is required
+  other than the terminate trap. It would be nice to "exec" and replace the
+  shell process with aria2c, but this would skip the terminate and clean up
+  logic. Prematurely removing the --input file may cause problems for aria2c (as
+  the process will be using the file handle). Further testing is needed to see
+  if "exec" can be used. For example, when an in-use file is removed, its file
+  handle is marked as "deleted" and would be removed when the running process is
+  terminated. In theory this is fine. It really depends if aria2c would
+  open/close the --input file more than once.
+INFO
+  aria2c --dry-run="$dry_run" --disable-ipv6 --input-file="$aria_downloads_manifest" --http-auth-challenge=true --http-user="$HTTP_USER" --http-passwd="$HTTP_PW" --max-connection-per-server="$MAX_CONNECTIONS_PER_SERVER" --min-split-size=1M --max-overall-download-limit="$DOWNLOAD_LIMIT" --max-concurrent-downloads="$MAX_CONCURRENT_DOWNLOADS" --conditional-get=true --split="$SPLIT" --enable-rpc="$enable_rpc" --rpc-listen-port="$rpc_listen_port" --min-tls-version="$min_tls_version"
 fi
-continue=

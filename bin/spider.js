@@ -1,8 +1,19 @@
+#!/usr/bin/env casperjs.js
+// Note the .js extension - this is the node launch wrapper to casperjs
+
 /* jshint devel: true, node: true */
 /* globals phantom, __utils__ */
 'use strict';
 /*
- * 
+ * Note: Removal of python dependency
+ * While checking the dependencies and documenting the utility, I discovered
+ * that I had inadvertently created a dependency on python by using the
+ * CasperJS python wrapper: casperjs/bin/casperjs.  
+ * CasperJS offers a number of launch wrappers, python, node and so on.
+ * I updated the utility to use bin/casper.js (not the .js extension) which is
+ * a node wrapper. This change removes the utilities dependency on python.
+ *
+ *
  *   ██████   █████  ███    ██  ██████  ███████ ██████  
  *   ██   ██ ██   ██ ████   ██ ██       ██      ██   ██ 
  *   ██   ██ ███████ ██ ██  ██ ██   ███ █████   ██████  
@@ -72,13 +83,15 @@
  * 
  * DEPENDENCIES
  * 
- * The script uses CasperJS, a navigation scripting & testing utility for the PhantomJS (WebKit) and SlimerJS (Gecko) headless browsers
+ * The script uses CasperJS, a navigation scripting & testing utility for the
+ * PhantomJS (WebKit) and SlimerJS (Gecko) headless browsers
  * https://casperjs-dev.readthedocs.io/
  * PhantomJS: a QtWebKit based headless web browser https://phantomjs.org/
  * an alt to PhantomJS is SlimerJS which requires FireFox https://slimerjs.org/download.html
  *
- * Unfortunately CasperJS, PhantomJS and SlimerJS have become inactive and deprecated projects.
- * This is likely in part due to Chrome and Firefox supporting native headless modes
+ * Unfortunately CasperJS, PhantomJS and SlimerJS have become inactive and
+ * deprecated projects.  This is likely in part due to Chrome and Firefox
+ * supporting native headless modes
  * 
  * Solution?
  * Puppeteer might be a future alt? con: Chrome/Chromium?
@@ -87,7 +100,8 @@
  * https://www.puzzle.ch/de/blog/articles/2018/02/12/phantomjs-is-dead-long-live-headless-browsers
  * https://browsersync.io/
  * 
- * See also TODO.txt: https://github.com/PeterCxy/yarmd which looks like a nodejs native project
+ * See also TODO.txt: https://github.com/PeterCxy/yarmd which looks like a
+ * nodejs native project
  * 
  * There are some python options too that cover beautiful-soup and selenium
  * https://realpython.com/modern-web-automation-with-python-and-selenium/
@@ -123,7 +137,8 @@
  * 
  * NOTES
  * casperjs has getCurrentUrl method, which returns a url-decoded url, might be
- * useful cite: https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#getcurrenturl
+ * useful cite:
+ * https://casperjs-dev.readthedocs.io/en/latest/modules/casper.html#getcurrenturl
  *
  * Regarding:
  * [warning] [phantom] Loading resource failed with status=fail (HTTP 200)
@@ -151,7 +166,7 @@
  * PhantomJS and SlimerJS (the engines that are used for CasperJS) are not
  * Node.js modules. They can be installed through npm for convenience.
  * They have a different base infrastructure of modules which is distinct from
- * Node.js.
+ * node.js.
  *
  * To be honest, in retrospect I wish I had not chosen a JavaScript-based
  * language for this script. I guess I've been disappointed by the limitations
@@ -208,7 +223,6 @@
  * The first version of this script was written in the fourth quarter of 2017. 
  * At the time, the future state of casperjs and phantomjs was not yet known.
  * So giving them a try didn't seem like a totally horrible idea at the time.
- * So it didn't seem like such a terrible idea at the time.
  *
  * The early versions were reliable but customised/hard coded for their internal
  * use case.
@@ -224,6 +238,20 @@
  * 
  * Now that the script logic is documented, I'd like to write a version in
  * either nodejs or python and remove the deprecated dependencies.
+ *
+ *
+ *  ████████  ██████  ██████   ██████  
+ *     ██    ██    ██ ██   ██ ██    ██ 
+ *     ██    ██    ██ ██   ██ ██    ██ 
+ *     ██    ██    ██ ██   ██ ██    ██ 
+ *     ██     ██████  ██████   ██████  
+ *
+ * * To align with https://en.wikipedia.org/wiki/Web_crawler#Politeness_policy
+ *   The script should really have a throttle mechanism to prevent overloading
+ *   the remote sites during spider/crawl operations
+ *
+ * * Add an option to prevent the spider from traversing out of/above the
+ *   starting URI path. This may actually be a reasonable default?
 */
 
 // SCRIPT START
@@ -232,6 +260,14 @@ var DEBUG = false;
 
 // require fs package so we can read files/configs
 var fs = require('fs');
+
+/*
+ * If /dev/tty is writable, then we can use this device for sending progress updates to the terminal
+ * /dev/tty: In each process, a synonym for the controlling terminal associated with the process group of that process, if any.
+ * cite: https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap10.html
+*/
+var TTY = false;
+if (fs.isWritable('/dev/tty')) TTY = true;
 
 // uriParser
 // looks like its not possible to use url or node:url in the phantomjs runtime
@@ -248,15 +284,15 @@ var uriParser = require('url-parse'); // << WORKS
 // used in this script to access env vars
 var system = require('system');
 
-if (system.env['DEBUG']) DEBUG = true;
+if (system.env.DEBUG) DEBUG = true;
 
 // handle path topics
 var cwd = fs.absolute('.');
-var HOME = system.env['HOME'];
+var HOME = system.env.HOME;
 
 if (!HOME || false === fs.isAbsolute(HOME)) {
   console.log('env var HOME was not set OR is not an absolute path.');
-  console.log('spider.js relies on HOME env being set to the absolute path of the current users home directory. Aborting.'); 
+  console.log('spider.js relies on HOME env var being set to the absolute path of the current users home directory. Aborting.'); 
   phantom.exit(1);
 }
 
@@ -265,12 +301,37 @@ if (false === fs.exists(cwd+'/node_modules') ) {
   phantom.exit(1);
 }
 
-var configFile='./config.yaml';
-// override configFile if CONFIG_FILE env is set
-if (system.env['CONFIG_FILE']) {
-  configFile = system.env['CONFIG_FILE'];
+/* 
+ * replace tilde (~) with a given replacement, e.g. absolute path to home dir
+ * regex logic:
+ * assert that the string starts with a tilde: ^~
+ * start a positive lookahead (non consuming) to assert one of the following:
+ *  the end of the string: $
+ *  OR a forward slash: /
+ *  OR a back slash: \
+ * 
+ * ~ will match
+ * ~/blah will match
+ * ~something will not match
+ * example: https://regex101.com/r/NRhwqa/1
+*/
+function pathTildeDecode(path, replacement) {
+  return path.replace(/^~(?=$|\/|\\)/, replacement);
 }
+
+var configFile = './config.yaml';
+// override configFile if CONFIG_FILE env is set
+if (system.env.CONFIG_FILE) {
+  configFile = system.env.CONFIG_FILE;
+}
+configFile = pathTildeDecode(configFile, HOME);
 console.log('configFile: ', configFile);
+
+if (false === fs.exists(configFile)) {
+  console.log('The specified config yaml does not exist. Aborting.');
+  phantom.exit(1);
+}
+
 //var YAML = require('yaml'); // did not work in casperjs runtime
 try {
   var YAML = require('js-yaml');
@@ -316,26 +377,8 @@ if ('undefined' !== typeof config.domainWhitelist && config.domainWhitelist && A
 }
 
 // override config.uriFile if URI_FILE env is set
-if (system.env['URI_FILE']) {
-  config.uriFile = system.env['URI_FILE'];
-}
-
-/* 
- * replace tilde (~) with a given replacement, e.g. absolute path to home dir
- * regex logic:
- * assert that the string starts with a tilde: ^~
- * start a positive lookahead (non consuming) to assert one of the following:
- *  the end of the string: $
- *  OR a forward slash: /
- *  OR a back slash: \
- * 
- * ~ will match
- * ~/blah will match
- * ~something will not match
- * example: https://regex101.com/r/NRhwqa/1
-*/
-function pathTildeDecode(path, replacement) {
-  return path.replace(/^~(?=$|\/|\\)/, replacement);
+if (system.env.URI_FILE) {
+  config.uriFile = system.env.URI_FILE;
 }
 
 config.uriFile = pathTildeDecode(config.uriFile, HOME);
@@ -411,6 +454,25 @@ function arrayContainsHref(array, href){
   return array.some(function(element) { return element.href === href; });
 }
 
+// Write a progress message to the terminal
+// ref: https://stackoverflow.com/q/2388090/490487
+// ref: https://stackoverflow.com/q/12628327/490487
+function updateProgressIndicator(msg) {
+  // ref: https://en.wikipedia.org/wiki/ANSI_escape_code
+  // ref: https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797
+  // ref: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+  // ref: https://medium.com/israeli-tech-radar/terminal-escape-codes-are-awesome-heres-why-c8eb938b1a1c
+  // ref: https://stackoverflow.com/q/4842424/490487
+  // \r aka ^M aka 0x0D aka CR writes a carriage return, which sends the terminal cursor to the left most position on the same line
+  // \E aka ^[ aka 0x1B aka ESC starts an escape sequence
+  // [ is the Control Sequence Introducer (CSI) which per the ANSI escape code docs is an Fe (C1) type escape sequence
+  // K ^K aka EL is the control sequence for "Erase in Line" aka "clear to end of line" (see also: tput el)
+  // summary: sends the terminal cursor to the left and clears to end of line
+  /* jshint -W113 */
+  if (TTY) fs.write('/dev/tty', '\r[KProgress: '+msg); 
+  /* jshint +W113 */
+}
+
 // the main logic function, called recursively
 function spider() {
   counterNumberOfSpiderCalls++;
@@ -429,7 +491,9 @@ function spider() {
       casper.open(myUri.href, { method: 'head' }).then(function(response) {
         console.log('START HEAD OPEN');
         visitedUris.push(response.url);
-        console.log('Opened:', response.url, 'contentType:', response.contentType, 'http status code:', response.status);
+        var logMsg = 'status: ' + response.status + ' | contentType: ' + response.contentType + ' | URI: ' + response.url;
+        console.log(logMsg);
+        updateProgressIndicator(logMsg);
         if (DEBUG) console.log(JSON.stringify(response, null, 2));
 
         // logic for html URI's
@@ -562,8 +626,8 @@ function checkPending() {
 casper.start().eachThen(uris, function(response) {
   console.log('CASPER START ITERATOR');
   // setHttpAuth if present in env
-  config.httpUser = ('undefined' !== typeof system.env['HTTP_USER'] && system.env['HTTP_USER']) ? system.env['HTTP_USER'] : false;
-  config.httpPass = ('undefined' !== typeof system.env['HTTP_PW'] && system.env['HTTP_PW']) ? system.env['HTTP_PW'] : false;
+  config.httpUser = ('undefined' !== typeof system.env.HTTP_USER && system.env.HTTP_USER) ? system.env.HTTP_USER : false;
+  config.httpPass = ('undefined' !== typeof system.env.HTTP_PW && system.env.HTTP_PW) ? system.env.HTTP_PW : false;
   if (false !== config.httpUser && false !== config.httpPass) {
     casper.setHttpAuth(config.httpUser, config.httpPass);
   }
@@ -610,6 +674,7 @@ casper.start().eachThen(uris, function(response) {
 
   // call spider(), which will call itself recursively until all URI's have been evaluated
   spider();
+  // TODO clear/update Progress line to completed state
   console.log('CASPER START END ITERATOR\n');
 });
 

@@ -18,22 +18,28 @@
 * Consider adding --python-is-python3 option to support any CasperJS python
   dependencies.
 
-* Add the URI for the install.sh code should users wish to review.
-
 * Consider improving shell detection similar to nvm install.sh, to detect and
   update the shell specific profile, to better support shells like zsh, ksh, etc
 
-* Update install() code to download latest stable release
-
 * Write the uninstall() logic, see NOTES in the function
+
+* install.sh output is verbose by default. Consider being terse by default? Or
+  add --terse? or vice versa --verbose options?
+
+* Should there be a trap+terminate to --uninstall on abort/problems? Or perhaps
+  this is not important because the installer can be run/re-run as many times as
+  necessary?
+
+* Write a GitHub action to functionally test install.sh? I.e. download and run
+  install.sh on containers with various distro/platform flavours.
 TODO
 
 ######################################################################
 # START defaults 
 
+git_repo_uri=https://github.com/kyle0r/recursive-downloader
+git_api_uri=https://api.github.com/repos/kyle0r/recursive-downloader
 install_target_name=recursive-downloader
-# set the INSTALL_VERSION if not set
-: "${INSTALL_VERSION:=2024.42.1}"
 
 curl_connection_timeout=5
 
@@ -59,6 +65,24 @@ is_available() {
 #+ Returns false if the program is missing OR an alias OR a builtin
 is_executable() {
   is_available "$1" && \test -x "$(\command -v "$1")"
+}
+
+is_set() {
+  : <<'TODO'
+  Example
+
+  # https://stackoverflow.com/a/13864829/490487
+  if eval '[ -z "${'"$1"'+x}" ]'; then
+
+TODO
+}
+
+is_empty() {
+  : <<'TODO'
+  Example
+
+  if eval '[ -z "$'"$1"'" ]'; then
+TODO
 }
 
 # complain to STDERR and exit with error
@@ -130,6 +154,44 @@ detect_shell() {
   unset error_msg
 }
 
+detect_home() {
+  # HOME env var checks
+  [ -z "${HOME+x}" ] && die "HOME env var is not set. Aborting." # verify set and not empty
+  # shellcheck disable=SC2016
+  [ ~ = "$HOME" ] || die 'Exception: The value of ~ and $HOME do not match. Aborting.' # shell should guarantee these match, otherwise something is wrong/modified
+  if [ -L "$HOME" ]; then
+    if ! is_executable greadlink && ! is_executable readlink ; then
+      die 'Command dependency: both greadlink and readlink are not available. Aborting.'
+    fi
+    [ -d "$( { greadlink -f -- "$HOME" || readlink -f -- "$HOME"; } 2>/dev/null )" ] || die "Attempts to resolve the HOME: '$HOME' symlink failed. Aborting."
+  elif [ ! -d "$HOME" ]; then
+     die "HOME: '$HOME' is not a directory. Aborting."
+  fi
+}
+
+detect_package_manager() {
+  : <<'TODO'
+  Write logic to detect various distro package managers.
+  Could then offer a suggestion on how to resolve missing dependencies.
+
+  Does nvm install.sh have an example?
+
+  Research:
+  https://unix.stackexchange.com/q/46081/19406
+  https://stackoverflow.com/q/394230/490487
+  https://stackoverflow.com/a/640099/490487 && https://www.gnu.org/software/shtool/
+
+  package managers list includes:
+  dnf (fedora etc)
+  yum (/etc/redhat-release)
+  pacman (/etc/arch-release)
+  emerge (/etc/gentoo-release)
+  zypp (/etc/SuSE-release)
+  apt-get (/etc/debian_version) / apt / dpkg-query
+  apk (/etc/alpine-release)
+TODO
+}
+
 load_nvm() {
   export NVM_DIR="$HOME/.nvm"
   if [ -d "$NVM_DIR" ]; then
@@ -185,6 +247,10 @@ EOM
 ######################################################################
 # START dependencies checks, warnings and notices
 
+detect_package_manager # TODO
+
+detect_home
+
 # awk dep check
 is_executable awk || die 'Dependency not found... command: awk. Aborting.'
 
@@ -238,6 +304,60 @@ uninstall() {
 NOTES
 }
 
+######################################################################
+# nvm install logic
+
+install_nvm() {
+
+  load_nvm
+
+  if ! is_available nvm; then
+    # get latest nvm release
+    installer_nvm_latest_version=$(curl --connect-timeout "$curl_connection_timeout" -sSL https://api.github.com/repos/nvm-sh/nvm/releases/latest|grep '"tag_name":'|grep -Eo 'v[0-9\.]+')
+
+    # TODO consider adding a tty in-progrss animation
+    if ! nvm_install_output=$(curl --connect-timeout "$curl_connection_timeout" -sSL 'https://raw.githubusercontent.com/nvm-sh/nvm/'"${installer_nvm_latest_version}"'/install.sh' | bash 1> /dev/null 2>&1); then
+      die "
+  Something went wrong trying to install nvm. Aborting.
+  
+  nvm output:
+
+$nvm_install_output
+
+"
+    fi
+
+    load_nvm
+
+    is_available nvm || die 'Something went wrong, nvm not available. Aborting.'
+
+    # Install nodejs - this will be a local user install
+    nvm install node 1>/dev/null 2>&1 || die 'Something went wrong using nvm to install nodejs. Aborting.'
+
+    # `node` and `npm` should now be available
+
+    # Update `npm`
+    nvm install-latest-npm 1>/dev/null 2>&1 || die 'Something went wrong using nvm to install the latest npm version. Aborting.'
+
+    cat <<EOM
+  ---------------------------
+  
+  FYI: nvm, npm and node have been intalled for the $(whoami) user.
+  
+  This has updated your shell's rc file.
+
+EOM
+  else
+
+    cat <<EOM
+  ---------------------------
+  
+  FYI: nvm is already installed.
+
+EOM
+  fi
+}
+
 # the installer
 install() {
 
@@ -283,8 +403,8 @@ install() {
   Note: Scripts piped to sh run non-interactively, so prompts won't work. This
   env var approach works for any invocation style.
 
-  You can view the install.sh code here:
-  TODO <<<URL>>>
+  You can view the install.sh code on GitHub here:
+  https://github.com/kyle0r/recursive-downloader/blob/master/install.sh
 
   This installer creates and modifies your \$HOME folder. It does NOT make any
   system wide changes. It does NOT require root or sudo.
@@ -318,8 +438,8 @@ install() {
 EOM
     ) # the space in the trailing whitespace prevents command substitution performing whitespace trimming
 
-    if [ "echo" = "$PAGER" ]; then
-      "$PAGER" "$welcome"
+    if [ "printf" = "$PAGER" ]; then
+      printf "%s" "$welcome"
     else
       printf "%s" "$welcome" | "$PAGER"
       scroll_up
@@ -330,8 +450,9 @@ EOM
 
   export THIS_IS_FINE=Y
 '
-    fi
+  fi # endif THIS_IS_FINE
 
+  # TODO check each dep and build a package manager install suggestion
   # detailed install dependency checks
   for dep in bash env curl git chmod mkdir grep ln cat readlink aria2c; do
     if ! is_executable "$dep"; then
@@ -362,93 +483,55 @@ EOM
 
 EOM
 
-######################################################################
-# nvm install logic
-
-  load_nvm
-
-  if ! is_available nvm; then
-
-    # 1. Install `nvm`  (Node Version Manager[ \[link\]](https://github.com/nvm-sh/nvm/tree/v0.39.7)) v0.39.7 is the latest as of commit time  
-    # 🔐 I suggest to review `install.sh` first to see its SAFE/SANE
-    # For example:
-    # curl -sSL 'https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh' | $EDITOR -
-   
-    # get latest nvm release
-    installer_nvm_latest_version=$(curl --connect-timeout "$curl_connection_timeout" -sSL https://api.github.com/repos/nvm-sh/nvm/releases/latest|grep '"tag_name":'|grep -Eo 'v[0-9\.]+')
-
-    # TODO consider adding a tty in-progrss animation
-    if ! nvm_install_output=$(curl --connect-timeout "$curl_connection_timeout" -sSL 'https://raw.githubusercontent.com/nvm-sh/nvm/'"${installer_nvm_latest_version}"'/install.sh' | bash 1> /dev/null 2>&1); then
-      die "
-  Something went wrong trying to install nvm. Aborting.
-  
-  nvm output:
-
-$nvm_install_output
-
-"
-    fi
-
-    load_nvm
-
-    is_available nvm || die 'Something went wrong, nvm not available. Aborting.'
-
-    # Install nodejs - this will be a local user install
-    nvm install node 1>/dev/null 2>&1 || die 'Something went wrong using nvm to install nodejs. Aborting.'
-
-    # `node` and `npm` should now be available
-
-    # Update `npm`
-    nvm install-latest-npm 1>/dev/null 2>&1 || die 'Something went wrong using nvm to install the latest npm version. Aborting.'
-
-    cat <<EOM
-  ---------------------------
-  
-  FYI nvm, npm and node have been intalled for the $(whoami) user.
-  
-  This has updated your shell's rc file.
-
-EOM
-  else
-
-    cat <<EOM
-  ---------------------------
-  
-  FYI nvm is already installed. 
-
-EOM
-  fi
-
-######################################################################
-# Install recursive-downloader
+  ######################################################################
+  # Install recursive-downloader
 
   # set INSTALL_PATH if not set
   : "${INSTALL_PATH:=${HOME}/.local/${install_target_name}}"
   config_path=${HOME}/.config/$install_target_name
 
-  # TODO use latest stable release via github API (see nvm install logic)
-  # FIXME replace tar with github release download logic
-  mkdir -p "$INSTALL_PATH"; tar -C "$INSTALL_PATH" -xf "${INSTALL_VERSION}.tar" || die 'Something went wrong extracting tar archive. Aborting.'
-  # chmod for good measure
-  chmod u+x "$INSTALL_PATH/${install_target_name}.sh" || die "Something went wrong trying to chmod $INSTALL_PATH/${install_target_name}.sh. Aborting."
+  if [ -z "${INSTALL_VERSION}" ]; then # empty check
+    #  TODO Could this API call be redundant if the following approach was used?
+    #+ https://stackoverflow.com/a/54836319/490487
+    #+ ^^ Is it possible to download archive assets using this approach?
+    #+ One drawback I can foresee is not having a version number?
+    if ! installer_release_version=$(curl --connect-timeout 5 -sSL "${git_api_uri}"/releases/latest | grep '"tag_name":'| grep -Eo '[0-9\.]+'); then
+      die "Unable to determine the latest release of $install_target_name. Aborting"
+    fi
+  else # otherwise use env var override
+    installer_release_version=$INSTALL_VERSION
+  fi
 
-  # install dependencies
+  mkdir -p "$INSTALL_PATH"
   cd "$INSTALL_PATH" || die "Could not change dir to $INSTALL_PATH. Aborting."
 
-  # shellcheck disable=SC2016
-  npm install --save 1>/dev/null 2>&1 || die 'Something went wrong with `npm install --save`. Aborting.'
+  #  TODO Could consider use of auto-generated "source code" release archive?
+  #+ E.g. .../archive/refs/tags/${installer_release_version}.tar.gz
+  if ! curl -sSL "${git_repo_uri}"/releases/download/"${installer_release_version}"/"${installer_release_version}".tar.gz | tar -xzf - 1>/dev/null 2>&1; then
+    die "Something went wrong extracting the $install_target_name release archive. Aborting."
+  fi
+
+  # chmod to be sure, to be sure
+  if ! chmod u+x "${install_target_name}.sh" install.sh bin/spider.js; then
+    die "Something went wrong when trying to chmod the commands of the utility. Aborting."
+  fi
+
+  install_nvm
+
+  # install dependencies
+  npm install --save 1>/dev/null 2>&1 || die "Something went wrong with 'npm install --save'. Aborting."
 
   mkdir -p "$config_path"
   #  TODO add a "$config_path/.nvm-was-installed" state file to document if the
   #+ installer installed nvm/npm etc. Can be used to make --uninstall decisions.
   
-  # Conditionally copy `config-example.yaml` to `${config_path}/config.yaml`
+  # Conditionally copy 'config-example.yaml' to '${config_path}/config.yaml'
   if [ ! -s "${config_path}/config.yaml" ]; then 
     cp config/config-example.yaml "${config_path}/config.yaml" || die 'Something went wrong trying to copy config-example.yaml'
   fi
 
-######################################################################
-# Updates to user profile to setup $bin_path
+  ######################################################################
+  # Updates to user profile to setup $bin_path
 
   # Make `recursive-downloader` available on `PATH`
   # shellcheck disable=SC2016
@@ -469,7 +552,7 @@ fi
 SCRIPT
 
     sleep 3
-    # need to prompt user to refresh their env/profile
+
     cat <<EOM
   ---------------------------
   
@@ -480,18 +563,17 @@ SCRIPT
 EOM
   fi #endif profile does not contain '$bin_path'
 
-######################################################################
-# Setup of the local bin
+  ######################################################################
+  # Setup of the local bin
 
   mkdir -p "$bin_path"
 
   if ! [ -e "$bin_path/$install_target_name" ]; then
-    ln -s "$INSTALL_PATH/${install_target_name}.sh" "$bin_path/$install_target_name"
+    ln -s "$INSTALL_PATH/${install_target_name}.sh" "$bin_path/$install_target_name" || die "Something went wrong creating the symlink to ${install_target_name}"
   fi
 
   if ! [ -e "$bin_path/spider.js" ]; then
-    ln -s "$INSTALL_PATH/bin/spider.js" "$bin_path/spider.js"
-    chmod +x "$bin_path/spider.js"
+    ln -s "$INSTALL_PATH/bin/spider.js" "$bin_path/spider.js" || die 'Something went wrong creating the symlink to spider.js'
   fi
 
   #  CasperJS bin/casper.js depends on the nodejs command which is a legacy
@@ -505,7 +587,7 @@ exec node "$@"
 
 FILE
 
-    chmod +x "${bin_path}/nodejs"
+    chmod u+x "${bin_path}/nodejs" || die "Something went wrong trying to chmod ${bin_path}/nodejs. Aborting."
 
     sleep 3
     cat <<EOM
@@ -564,18 +646,20 @@ EOM
 
   You can try the following methods:
   
-  1a. Soft reload your shell, my personal favourite. This method will soft
-  reload your shell, env WILL be inherited and parent process association
-  remains intact:
+  1a. Soft reload your shell, my personal favourite and usually sufficient.
+  This method will soft reload your shell, env WILL be inherited and parent
+  process association / process group remains intact:
   
+  # soft refresh shell inheriting env, usually sufficient
   \$ exec $SHELL -l
 
   -- OR --
 
-  1b. Hard reload your shell, env will NOT be inherited. One side-effect of this
-  method is that the your shell process will be disassociated from any parent
-  process:
+  1b. Hard reload your shell, env will NOT be inherited. Use this approach if
+  you are concerned about env var hygine. One side-effect of this method is that
+  the your shell process will be disassociated from any parent process:
 
+  # hard refresh shell resetting env
   \$ exec sudo --login --user $username
   
   alt: $ exec sudo su - $username

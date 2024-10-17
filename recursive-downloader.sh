@@ -3,14 +3,24 @@
 # This script was developed on Debian.
 # The majority of this script should be POSIX compliant. 
 
-#  pipefail is primarily a bash feature, which is the main reason for using bash
-#+ rather than sh in this script.
+#  pipefail is a bash feature, which is the main reason for using bash rather
+#+ than sh in this script.
 #+ https://manpages.debian.org/stable/bash/bash.1.en.html#pipefail
 #+ A future version of Debian shell (dash) should support pipefail see:
 #+ https://stackoverflow.com/a/78501655/490487
 #+ In the future, the script could be tested with dash supporting pipefail and
 #+ become POSIX compliant.
-set -o pipefail
+#+
+#+ The return status of a pipeline is the exit status of the last command,
+#+ unless the pipefail option is enabled. If pipefail is enabled, the pipeline's
+#+ return status is the value of the last (rightmost) command to exit with a
+#+ non-zero status, or zero if all commands exit successfully.
+#+
+#+ In most cases it is desirable that all commands in a pipeline have a zero
+#+ exit status. The pipefail feature makes it possible to detect any non-zero
+#+ exit status in a pipeline, which is much more useful for handling erroneous
+#+ commands than the default pipefail behaviour.
+set -o pipefail # enable pipefail
 
 version=2024.42.1
 #  version convention: YEAR.WEEK.RELEASE - date +'%G.%V.1'
@@ -75,9 +85,43 @@ Script updated to use spider.js (CasperJS) instead of wget
   shell process with aria2c via exec.
 CHANGELOG
 
+######################################################################
+# START functions
+
+# upper case a string
+toupper() { tr '[:lower:]' '[:upper:]'; } # this works with pipe
+# handy pause functions - not POSIX compliant
+pause() { read -rp "$*" -n1; }
+generic_pause() { pause 'Press any key to continue...'; }
+# complain to STDERR and exit with error
+die() { echo "$*" 1>&2; exit 2; }
+
+# https://askubuntu.com/a/997893
+# equivalent to keystroke CTRL+L
+scroll_up() {
+  printf '\33[H\33[2J'
+}
+
+detect_home() {
+  # HOME env var checks
+  [ -z "${HOME+x}" ] && die "HOME env var is not set. Aborting." # verify set and not empty
+  # shellcheck disable=SC2016
+  [ ~ = "$HOME" ] || die 'Exception: The value of ~ and $HOME do not match. Aborting.' # shell should guarantee these match, otherwise something is wrong/modified
+  if [ -L "$HOME" ]; then
+    if ! is_executable greadlink && ! is_executable readlink ; then
+      die 'Command dependency: both greadlink and readlink are not available. Aborting.'
+    fi
+    [ -d "$( { greadlink -f -- "$HOME" || readlink -f -- "$HOME"; } 2>/dev/null )" ] || die "Attempts to resolve the HOME: '$HOME' symlink failed. Aborting."
+  elif [ ! -d "$HOME" ]; then
+     die "HOME: '$HOME' is not a directory. Aborting."
+  fi
+}
 
 ######################################################################
 # START defaults & variables
+
+detect_home
+
 min_tls_version=TLSv1.2
 enable_rpc=false
 rpc_listen_port=6800
@@ -132,23 +176,6 @@ PATH=${script_dir}/node_modules/phantomjs-prebuilt/bin:${script_dir}/node_module
 #+ expansion, hence this approach.
 # Note: the ~/ cannot be quoted or tilde expansion will fail
 [ -z "${CONFIG_FILE+x}" ] && export CONFIG_FILE=~/".config/${me}/config.yaml"
-
-######################################################################
-# START functions
-
-# upper case a string
-toupper() { tr '[:lower:]' '[:upper:]'; } # this works with pipe
-# handy pause functions - not POSIX compliant
-pause() { read -rp "$*" -n1; }
-generic_pause() { pause 'Press any key to continue...'; }
-# complain to STDERR and exit with error
-die() { echo "$*" 1>&2; exit 2; }
-
-# https://askubuntu.com/a/997893
-# equivalent to keystroke CTRL+L
-scroll_up() {
-  printf '\33[H\33[2J'
-}
 
 
 ######################################################################

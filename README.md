@@ -1,6 +1,3 @@
-TODO add anchor links, source links etc  
-TODO resolve open TODOs!
-
 # Please use politely and responsibly
 **⚠ This utility could result in significant bandwidth costs to you and/or a third party if misused ⚠**  
 Left unattended with a sub-optimal config, `recursive-downloader` could traverse large portions of the public Internet (at least until local memory resources are exhausted) - such is the nature of HTML href recursion. Please use the utility politely and responsibly [[policy](https://en.wikipedia.org/wiki/Web_crawler#Politeness_policy)], and consider the local and remote bandwidth costs, and the impact of the number of HTTP requests made per second.
@@ -13,9 +10,9 @@ This file was edited with [stackedit.io](https://stackedit.io) ❤
 `recursive-downloader` - An interactive CLI utility for recursive HTTP downloads.
 
 # Version
-First version:  
-First release: 
-Current release `2024.41.1`  
+First version: `2012.47.1`  
+First release:  `2024.42.1`  
+Current release `2024.42.1`  
 Version convention: YEAR.WEEK.RELEASE  
 Example: `date +'%G.%V.1'` where 1 is incremented per release within the given week
 
@@ -52,13 +49,23 @@ See the **Background** section to get more insights on why the utility came to b
 
 `recursive-downloader` has the concept of `pendingUris`, `visitedUris` and `actualDownloads` which helps to keep recursion to a minimum and mitigate infinite recursion.
 # Usage
-TODO
+The default invocation:
 ```
 $ recursive-downloader
 ```
+Example with AuthN - you will be prompted to type the password.  
+You can also securely export `HTTP_PW` prior to invocation.
+```
+$ HTTP_USER=user recursive-downloader
+```
+Example modifying the download limit (10 Mebibyte/s):
+```
+$ DOWNLOAD_LIMIT=10M recursive-downloader
+```
 ## Env vars
-A number of env vars are available to control the utilities behaviour:
-
+A number of env vars are available to control the utilities behaviour. One can specify them inline per the usage examples, or export them to the shell env.  
+Note: Inline style sets the env vars for the invocation but doesn't export them to the shell env.
+### General 
 **`DEBUG`** if set (non-blank) turn on debug logging level. Default: none.  
 **`EDITOR`** uses your existing `EDITOR` preference, or you can specify your preferred editor. `vim` is the fallback.  
 **`URI_FILE`** specify a URI file, one URI per line. Default: `~/spider-uris.txt`  
@@ -90,15 +97,20 @@ Reference: A list of common MIME types hosted by Mozilla [here](https://develope
 ## CasperJS
 I recommend reading the `spider.js` code docs to understand more about how `spider.js` works and some of the drawbacks of `CasperJS`. There are limitations on which `npm` packages can be run within the `CasperJS` runtime. This is a good reason to port the code to a modern web spider library. In other words, I would port the code before implementing external URI list storage, so that the utility is not restricted in its choice of libraries. There are some ideas captured in the code docs.
 # Installation
-TODO
 💡🔐 The following steps are preferably performed as a non-root user for best InfoSec practice.
 ## Automated installer
+See the demo video for an example of how to install and run `recursive-downloader`.
 ### Quick start
+```
+$ curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | sh
+```
 ### What the installer does
-### How to use the installer
-
-...
-...
+The installer provides detailed information about what it will do when invoked. To perform the installation steps, you need to set the `THIS_IS_FINE` env var. For example:
+```
+$ curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | THIS_IS_FINE=Y sh
+```
+## Source install
+TODO
 ## Distro install package?
 Not yet. The focus has been on developing a robust shell installer for individual users, that installs into the user's `~/.local` directory structure. The project depends on `nvm`/`node` and also has two deprecated `npm` package dependencies. I don't feel that users would want to install this project system-wide (requiring root privileges), but rather on a per-user basis. This is also in line with the trend I've noticed for open source utilities, which are moving towards self-contained/virtual envs and user-specific installs.
 
@@ -107,21 +119,29 @@ For example, in order to create a .deb package, I'd need to figure out the `nvm`
 
 💡 **Research TODO:** Is there a `dpkg` pattern for non system-wide per-user installs? Similar to `systemd` system units vs. user units. Maybe the package could prompt the user to choose a user or system install type?
 # Upgrading
-Run the installer and the latest release will be downloaded from GitHub. Upgrading will overwrite code but not config.
+Run the installer and the latest release will be downloaded from GitHub and installed. Upgrading will overwrite code but not config.
 # Uninstall
-TODO (Documented not implemented): Run the installer with the `--uninstall` option.
+TODO (Documented but not implemented): Run the installer with the `--uninstall` option.
 # Documentation
 ## Warnings
-### Low risk
-### High risk
-## Config docs
-The example config contains suitable in-line documentation. TODO link to `config-example.yaml`
-## Code docs
-Both `recursive-downloader.sh` and `spider.js` have relatively verbose code docs. You can also check out `/docs/NOTES.txt` which documents some historical details and challenges of the project.
+💡 The risk of being exploited is very low if you never try to download html links (html content invokes href recursion) and only use direct download links. Obviously, this use case skips the recursion feature, which is one of the most useful features of the `recursive-downloader` utility.
 
-TODO add links to the source in master
+The project currently uses two deprecated libraries. `CasperJS` and `PhantomJS`. Care should be taken to understand the risks you may be exposing yourself to. For example, performing recursive downloads on sites you own or have a high level of trust in the html content should be fine.  
+
+⚠🔐 **However,** there is an inherent risk in downloading from unknown sites, as there may be something in the parsed html that tries to exploit the deprecated libraries. **I strongly recommend that you read the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs if you plan to use the utility on untrusted sites.**
+
+💡🔐 In the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs, I have tried to cover the details and mitigations for obvious risks.
+
+### Low risk
+TODO details available in the code docs of `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js)
+### High risk
+TODO details available in the code docs of `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js)
+## Config docs
+The example config contains suitable in-line documentation. [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/config/config-example.yaml)
+## Code docs
+Both `recursive-downloader.sh` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/recursive-downloader.sh) and `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) have relatively verbose code docs. You can also check out `/docs/NOTES.txt` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/docs/NOTES.txt) which documents some historical details and challenges of the project.
 ## Sequence Diagram
-In the docs folder you will find `recursive-downloader.seqdiag` which is written in seqdiag format [[repo](https://github.com/blockdiag/seqdiag)] [[docs](http://blockdiag.com/en/seqdiag)].  
+In the docs folder you will find `recursive-downloader.seqdiag` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/docs/recursive-downloader.seqdiag) which is written in seqdiag format [[repo](https://github.com/blockdiag/seqdiag)] [[docs](http://blockdiag.com/en/seqdiag)].  
 The svg image is rendered and hosted by [kroki.io](https://kroki.io) ❤  
 A mirror of the svg is available in the docs folder.
 
@@ -129,15 +149,14 @@ The diagram should provide just enough detail to give a good visual introduction
 
 ![enter image description here](https://kroki.io/seqdiag/svg/eNqVkU1Pg0AQhu_-ignpQQ9w8OrHRbGhMdG09WQMGZaxLKG7687aHoz_XSi0Lg3UeH0zz5OZd5g-cokr-DoDEJUECG8hQy7gtcKMKriBwJL4tCw3FOZ6qyqNOdmIi-DtqmZ2szUTTOL7ZPk0Dzywi2DyMk_Sh-Qx9pDr8BfpeZTOCe6QDdnZwreJXVZyVDKwkc0SJbfGY-ikJ9PasbNo_safC1ROr_u8acNIqpKEm_H5PmgXXAgrjbvwzZ6mVm8pY7Ibsp6zvWeEqas6MEPrNlUeMb2aR5vYv5NhjUq-E7t__BStxPRgSAcMYy9uyEvhObvgtLIbGilwGi97Y35nAxc3s98_1TrtoA==)
 ## Logic `spider.js`
-TODO - most of this is documented in the code docs, either link or paste here.
-...
-...
+TODO - permalink to the logic doc block in `spider.js`.
+
 ## Older `wget` version
-The repo has a `2017.01.1` tag, which is the last version of the tool that used `wget` before I wrote `spider.js` for `CasperJS` and replaced the `wget` logic. It might be interesting to browse the code or try this version to see how it worked. I tested the `2017.01.1` tag in 2024 and it still worked as intended.
+The repo has a `2017.01.1` tag [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1), which is the last version of the tool that used `wget` before I wrote `spider.js` for `CasperJS` and replaced the `wget` logic. It might be interesting to browse the code or try this version to see how it worked. I tested the `2017.01.1` tag in 2024 and it still worked as intended.
 # Bugs
 Open an issue via the GitHub project and/or submit a pull request. [[GitHub repo issues link](https://github.com/kyle0r/recursive-downloader/issues)]
 # Contributing
-Feel free to make a feature request or fork the project and make pull requests etc. [[GitHub repo link](https://github.com/kyle0r/recursive-downloader)]
+Feel free to make a feature request or fork the project and make pull requests etc. [[GitHub repo PR link](https://github.com/kyle0r/recursive-downloader/pulls)]
 # Background
 **Original goal:** Download files recursively from HTTP-hosted directory indexes.
 
@@ -161,7 +180,7 @@ Why not just use `rsync` or other protocols that support recursive file transfer
 # History
 Since ~2012, `recursive-downloader` has been my go-to script when I've had a batch of HTTP downloads to perform. Especially if the remote site was web server directory indexes.
 
-In 2012-Nov, the original `recursive-downloader` was born, using simple shell techniques, `wget` to create the download manifest and `aria2c` to perform the downloads. You can review and/or use the latest version using `wget` by looking at the git tag `2017.01.1`.
+In 2012-Nov, the original `recursive-downloader` was born, using simple shell techniques, `wget` to create the download manifest and `aria2c` to perform the downloads. You can review and/or use the latest version using `wget` by looking at the git tag `2017.01.1` [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1).
 
 In 2017 I wrote the first version of `spider.js` utilising `CasperJS` which in turn utilises `PhantomJS`. Sometime between 2017 and 2019 `spider.js` replaced the rudimentary `wget` functionality.
 
@@ -196,14 +215,14 @@ As with any technology choice, there are pros and cons. As I was writing the REA
 # Side quest?
 I would consider the code and code docs in this repo to be a fairly holistic capture of how to write a basic web spider using `CasperJS`. The knowledge and experience gained over the years of development could be consumed and applied to speed up similar or forked projects. Sharing this knowledge was one of my motivations for publishing the project.
 
-In particular, if you study the code docs in `spider.js`, you should be in a strong position to understand `CasperJS`, what it can do from a website navigation perspective, and its limitations. There is extensive documentation on how I achieved the recursive behaviour with `CasperJS`. It was challenging at first because of the async nature of some of the `CasperJS` functions. Overall, there is a considerable amount of links and citations to reference documentation and examples.
+In particular, if you study the code docs in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js), you should be in a strong position to understand `CasperJS`, what it can do from a website navigation perspective, and its limitations. There is extensive documentation on how I achieved the recursive behaviour with `CasperJS`. It was challenging at first because of the async nature of some of the `CasperJS` functions. Overall, there is a considerable amount of links and citations to reference documentation and examples.
 
-The knowledge captured in `/docs/NOTES.txt` should also provide some useful insights and cover some of the challenges I faced and how I overcame them, in particular how I kept the utility running through numerous Linux distro upgrades over the years.
+The knowledge captured in `/docs/NOTES.txt` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/docs/NOTES.txt) should also provide some useful insights and cover some of the challenges I faced and how I overcame them, in particular how I kept the utility running through numerous Linux distro upgrades over the years.
 
-I wish you fun and happy coding. Feel free to ping me if you embark on your own spidery coding adventures.
+Have fun and happy coding. Feel free to ping me if you have any spidery coding adventures of your own.
 
 # License
-Released under MIT License. See the LICENSE file for complete details.
+Released under MIT License. See the LICENSE file for complete details. [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/LICENSE)
 ## Disclaimer
 Per the license:  
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR

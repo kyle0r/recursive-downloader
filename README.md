@@ -1,6 +1,9 @@
+
 # Please use politely and responsibly
 **⚠ This utility could result in significant bandwidth costs to you and/or a third party if misused ⚠**  
 Left unattended with a sub-optimal config, `recursive-downloader` could traverse large portions of the public Internet (at least until local memory resources are exhausted) - such is the nature of HTML href recursion. Please use the utility politely and responsibly [[policy](https://en.wikipedia.org/wiki/Web_crawler#Politeness_policy)], and consider the local and remote bandwidth costs, and the impact of the number of HTTP requests made per second.
+
+💡 In order to run, the utility requires at least one regex pattern to be present in the `domainWhitelist` configuration. This provides control over cross-domain domain crawling. **In order to keep the cross-domain recursion to a minimum, *strategic use* of the `domainWhitelist` feature is strongly recommended.**
 
 ---
 This file was edited with [stackedit.io](https://stackedit.io) ❤
@@ -48,6 +51,11 @@ See the **Background** section to get more insights on why the utility came to b
     * downloadPath - specify the relative or absolute local path where downloads should be stored
 
 `recursive-downloader` has the concept of `pendingUris`, `visitedUris` and `actualDownloads` which helps to keep recursion to a minimum and mitigate infinite recursion.
+## What `recursive-downloader` doesn't currently do
+### Website archival
+As of 2024-Q4, the utility is not designed to fully archive websites à la [The Wayback Machine](https://web.archive.org/). However, it *should* be relatively straightforward to implement this functionality as an optional feature (e.g. `--wayback-machine` mode). One would have to consider how to capture non-href resources such as JavaScript and CSS. Pull requests are welcome if you implement something like this.  
+I'm not sure if archive.org have published their tooling in the public domain, but that would be worth researching. A project that came up in quick web search was https://github.com/akamhy/waybackpy which might provide some leads.
+
 # Usage
 The default invocation:
 ```
@@ -129,7 +137,8 @@ TODO (Documented but not implemented): Run the installer with the `--uninstall` 
 
 The project currently uses two deprecated libraries. `CasperJS` and `PhantomJS`. Care should be taken to understand the risks you may be exposing yourself to. For example, performing recursive downloads on sites you own or have a high level of trust in the html content should be fine.  
 
-⚠🔐 **However,** there is an inherent risk in downloading from unknown sites, as there may be something in the parsed html that tries to exploit the deprecated libraries. **I strongly recommend that you read the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs if you plan to use the utility on untrusted sites.**
+⚠🔐 **However,** there is an inherent risk in downloading from unknown sites, as there may be something in the parsed html that tries to exploit the deprecated libraries.  
+**I strongly recommend that you read the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs if you plan to use the utility on untrusted sites.**
 
 💡🔐 In the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs, I have tried to cover the details and mitigations for obvious risks.
 
@@ -209,7 +218,9 @@ Enter the fantastic `aria2c` [🔗](https://aria2.github.io/) utility which mark
 
 So, in Q4 of 2012, with the aforementioned drawbacks of `rsync` and ssh-based transfers, and the lack of recursive download support in `aria2c`, I set about writing a script that would use the HTTP protocol and `aria2c` to achieve my goals.
 
-... a few moments later ... the first revision of `recursive-downloader.sh` was born. It utilised the `wget --mirror --spider` features to recursively trawl/spider URI's. `wget` would chekc URI's exist but not download them, and my `recursive-downloader` parsed the `wget` log to produce a download manifest for `aria2c`.
+... A few moments later ...
+
+The first revision of `recursive-downloader.sh` was born. It utilised the `wget --mirror --spider` features to recursively trawl/spider URI's. `wget` would check URI's exist but not download them, and my `recursive-downloader` parsed the `wget` log to produce a download manifest for `aria2c`.
 
 ## InfoSec and Privacy
 As with any technology choice, there are pros and cons. As I was writing the README for this project, I went down a HTTP InfoSec rabbit hole. I have published my in-depth research on HTTP privacy and security concerns on the the Handy to know Shizzle Blog [Research on HTTP privacy and security concerns](https://coda.io/@ff0/handy-to-know-shizzle/research-on-http-privacy-and-security-concerns-7)

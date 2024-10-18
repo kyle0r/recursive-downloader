@@ -51,16 +51,16 @@ See the **Background** section to get more insights on why the utility came to b
 # Usage
 The default invocation:
 ```
-$ recursive-downloader
+recursive-downloader
 ```
 Example with AuthN - you will be prompted to type the password.  
 You can also securely export `HTTP_PW` prior to invocation.
 ```
-$ HTTP_USER=user recursive-downloader
+HTTP_USER=user recursive-downloader
 ```
 Example modifying the download limit (10 Mebibyte/s):
 ```
-$ DOWNLOAD_LIMIT=10M recursive-downloader
+DOWNLOAD_LIMIT=10M recursive-downloader
 ```
 ## Env vars
 A number of env vars are available to control the utilities behaviour. One can specify them inline per the usage examples, or export them to the shell env.  
@@ -83,7 +83,8 @@ The default network configuration for the `recursive-downloader` is to download 
 
 
 ## Demo video
-TODO
+https://github.com/user-attachments/assets/63f89cd0-91d1-49f4-bfd6-dd591f5faaa0
+
 # Limitations
 ## `Content-Type: text/html` 
 In its current form, `recursive-downloader` downloads MIME types that **DO NOT** match the `text/html` pattern. In other words, by default, the utility downloads everything but HTML.  
@@ -102,12 +103,12 @@ I recommend reading the `spider.js` code docs to understand more about how `spid
 See the demo video for an example of how to install and run `recursive-downloader`.
 ### Quick start
 ```
-$ curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | sh
 ```
 ### What the installer does
 The installer provides detailed information about what it will do when invoked. To perform the installation steps, you need to set the `THIS_IS_FINE` env var. For example:
 ```
-$ curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | THIS_IS_FINE=Y sh
+curl -sSL https://raw.githubusercontent.com/kyle0r/recursive-downloader/main/install.sh | THIS_IS_FINE=Y sh
 ```
 ## Source install
 TODO
@@ -149,7 +150,7 @@ The diagram should provide just enough detail to give a good visual introduction
 
 ![enter image description here](https://kroki.io/seqdiag/svg/eNqVkU1Pg0AQhu_-ignpQQ9w8OrHRbGhMdG09WQMGZaxLKG7687aHoz_XSi0Lg3UeH0zz5OZd5g-cokr-DoDEJUECG8hQy7gtcKMKriBwJL4tCw3FOZ6qyqNOdmIi-DtqmZ2szUTTOL7ZPk0Dzywi2DyMk_Sh-Qx9pDr8BfpeZTOCe6QDdnZwreJXVZyVDKwkc0SJbfGY-ikJ9PasbNo_safC1ROr_u8acNIqpKEm_H5PmgXXAgrjbvwzZ6mVm8pY7Ibsp6zvWeEqas6MEPrNlUeMb2aR5vYv5NhjUq-E7t__BStxPRgSAcMYy9uyEvhObvgtLIbGilwGi97Y35nAxc3s98_1TrtoA==)
 ## Logic `spider.js`
-TODO - permalink to the logic doc block in `spider.js`.
+Here is a permalink to the logic doc block in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/d25ff030c86bd0b197ec5276cfa74af157d35465/bin/spider.js#L113).
 
 ## Older `wget` version
 The repo has a `2017.01.1` tag [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1), which is the last version of the tool that used `wget` before I wrote `spider.js` for `CasperJS` and replaced the `wget` logic. It might be interesting to browse the code or try this version to see how it worked. I tested the `2017.01.1` tag in 2024 and it still worked as intended.

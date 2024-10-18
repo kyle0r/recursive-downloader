@@ -1,4 +1,3 @@
-
 # Please use politely and responsibly
 **⚠ This utility could result in significant bandwidth costs to you and/or a third party if misused ⚠**  
 Left unattended with a sub-optimal config, `recursive-downloader` could traverse large portions of the public Internet (at least until local memory resources are exhausted) - such is the nature of HTML href recursion. Please use the utility politely and responsibly [[policy](https://en.wikipedia.org/wiki/Web_crawler#Politeness_policy)], and consider the local and remote bandwidth costs, and the impact of the number of HTTP requests made per second.
@@ -7,6 +6,8 @@ Left unattended with a sub-optimal config, `recursive-downloader` could traverse
 
 ---
 This file was edited with [stackedit.io](https://stackedit.io) ❤
+
+[//]: # (# TODO Table of Contents)
 
 ---
 # Name
@@ -54,6 +55,7 @@ See the **Background** section to get more insights on why the utility came to b
 ## What `recursive-downloader` doesn't currently do
 ### Website archival
 As of 2024-Q4, the utility is not designed to fully archive websites à la [The Wayback Machine](https://web.archive.org/). However, it *should* be relatively straightforward to implement this functionality as an optional feature (e.g. `--wayback-machine` mode). One would have to consider how to capture non-href resources such as JavaScript and CSS. Pull requests are welcome if you implement something like this.  
+
 I'm not sure if archive.org have published their tooling in the public domain, but that would be worth researching. A project that came up in quick web search was https://github.com/akamhy/waybackpy which might provide some leads.
 
 # Usage
@@ -92,19 +94,6 @@ The default network configuration for the `recursive-downloader` is to download 
 
 ## Demo video
 https://github.com/user-attachments/assets/63f89cd0-91d1-49f4-bfd6-dd591f5faaa0
-
-# Limitations
-## `Content-Type: text/html` 
-In its current form, `recursive-downloader` downloads MIME types that **DO NOT** match the `text/html` pattern. In other words, by default, the utility downloads everything but HTML.  
-💡 It would be relatively easy to change the logic to optionally download HTML. Feel free to submit a PR or feature request.
-
-MIME types are also known as Media Type [🔗](https://en.wikipedia.org/wiki/Media_type) or the HTML header `Content-Type` [🔗](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type)  
-When `recursive-downloader` encounters a URI with `Content-Type: text/html`, it fetches the resource and parses any hrefs. The hrefs are added to the list of `pendingUris`. There is no "downloading" of the HTML to file.  \
-Reference: A list of common MIME types hosted by Mozilla [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/MIME_types/Common_types).
-## Local memory
-`recursive-downloader` maintains lists of the URIs it processes in memory; if the URIs being processed have an extreme number of hrefs, then `spider.js` can be expected to run out of local memory.  This could be mitigated by offloading the list storage to a larger and/or more efficient list storage mechanism, such as an `sqlite` database, or even file backed storage.
-## CasperJS
-I recommend reading the `spider.js` code docs to understand more about how `spider.js` works and some of the drawbacks of `CasperJS`. There are limitations on which `npm` packages can be run within the `CasperJS` runtime. This is a good reason to port the code to a modern web spider library. In other words, I would port the code before implementing external URI list storage, so that the utility is not restricted in its choice of libraries. There are some ideas captured in the code docs.
 # Installation
 💡🔐 The following steps are preferably performed as a non-root user for best InfoSec practice.
 ## Automated installer
@@ -135,7 +124,7 @@ TODO (Documented but not implemented): Run the installer with the `--uninstall` 
 ## Warnings
 💡 The risk of being exploited is very low if you never try to download html links (html content invokes href recursion) and only use direct download links. Obviously, this use case skips the recursion feature, which is one of the most useful features of the `recursive-downloader` utility.
 
-The project currently uses two deprecated libraries. `CasperJS` and `PhantomJS`. Care should be taken to understand the risks you may be exposing yourself to. For example, performing recursive downloads on sites you own or have a high level of trust in the html content should be fine.  
+The project currently uses two deprecated libraries. `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/) and `PhantomJS` [🔗](https://web.archive.org/web/20240814035354/https://phantomjs.org/). Care should be taken to understand the risks you may be exposing yourself to. For example, performing recursive downloads on sites you own or have a high level of trust in the html content should be fine.  
 
 ⚠🔐 **However,** there is an inherent risk in downloading from unknown sites, as there may be something in the parsed html that tries to exploit the deprecated libraries.  
 **I strongly recommend that you read the `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) code docs if you plan to use the utility on untrusted sites.**
@@ -155,14 +144,50 @@ In the docs folder you will find `recursive-downloader.seqdiag` [🔗](https://g
 The svg image is rendered and hosted by [kroki.io](https://kroki.io) ❤  
 A mirror of the svg is available in the docs folder.
 
-The diagram should provide just enough detail to give a good visual introduction and overview of how the `recursive-downloader` script runs and interacts with the user and CasperJS, and the projects main dependencies.
+The diagram should provide just enough detail to give a good visual introduction and overview of how the `recursive-downloader` script runs and interacts with the user and CasperJS [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/), and the projects main dependencies.
 
 ![enter image description here](https://kroki.io/seqdiag/svg/eNqVkU1Pg0AQhu_-ignpQQ9w8OrHRbGhMdG09WQMGZaxLKG7687aHoz_XSi0Lg3UeH0zz5OZd5g-cokr-DoDEJUECG8hQy7gtcKMKriBwJL4tCw3FOZ6qyqNOdmIi-DtqmZ2szUTTOL7ZPk0Dzywi2DyMk_Sh-Qx9pDr8BfpeZTOCe6QDdnZwreJXVZyVDKwkc0SJbfGY-ikJ9PasbNo_safC1ROr_u8acNIqpKEm_H5PmgXXAgrjbvwzZ6mVm8pY7Ibsp6zvWeEqas6MEPrNlUeMb2aR5vYv5NhjUq-E7t__BStxPRgSAcMYy9uyEvhObvgtLIbGilwGi97Y35nAxc3s98_1TrtoA==)
 ## Logic `spider.js`
 Here is a permalink to the logic doc block in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/d25ff030c86bd0b197ec5276cfa74af157d35465/bin/spider.js#L113).
 
 ## Older `wget` version
-The repo has a `2017.01.1` tag [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1), which is the last version of the tool that used `wget` before I wrote `spider.js` for `CasperJS` and replaced the `wget` logic. It might be interesting to browse the code or try this version to see how it worked. I tested the `2017.01.1` tag in 2024 and it still worked as intended.
+The repo has a `2017.01.1` tag [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1), which is the last version of the tool that used `wget` before I wrote `spider.js` for `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/) and replaced the `wget` logic. It might be interesting to browse the code or try this version to see how it worked. I tested the `2017.01.1` tag in 2024 and it still worked as intended.
+# Limitations
+## `Content-Type: text/html` 
+In its current form, `recursive-downloader` downloads MIME types that **DO NOT** match the `text/html` pattern. In other words, by default, the utility downloads everything but HTML.  
+💡 It would be relatively easy to change the logic to optionally download HTML. Feel free to submit a PR or feature request.
+
+MIME types are also known as Media Type [🔗](https://en.wikipedia.org/wiki/Media_type) or the HTML header `Content-Type` [🔗](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type)  
+When `recursive-downloader` encounters a URI with `Content-Type: text/html`, it fetches the resource and parses any hrefs. The hrefs are added to the list of `pendingUris`. There is no "downloading" of the HTML to file.  \
+Reference: A list of common MIME types hosted by Mozilla [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/MIME_types/Common_types).
+## Local memory
+`recursive-downloader` maintains lists of the URIs it processes in memory; if the URIs being processed have an extreme number of hrefs, then `spider.js` can be expected to run out of local memory.  This could be mitigated by offloading the list storage to a larger and/or more efficient list storage mechanism, such as an `sqlite` database, or even file backed storage.
+## CasperJS [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/)
+I recommend reading the `spider.js` code docs [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js) to understand more about how `spider.js` works and some of the drawbacks of `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/). There are limitations on which `npm` packages can be run within the `CasperJS` runtime [[knowledge captured here](https://github.com/kyle0r/recursive-downloader/blob/5aa9c0a33257dbcc645b4b62e404de998d8c7bbb/bin/spider.js#L273)]. This is a good reason to port the code to a modern web spider library. In other words, I would port the code before implementing external URI list storage, so that the utility is not restricted in its choice of libraries. There are some ideas captured in the code docs.
+## Spider/Crawler logic is single threaded
+The download functionality of recursive-downloader is multi-threaded thanks to `aria2c`. The `spider.js` logic, where the utility crawls HTML looking for hrefs, is single threaded. For the time being, this is a good thing, as it keeps the concurrency of the requests to one, and partially mitigates `spider.js` overloading remote sites.  
+From a software design perspective, there are a number of approaches/patterns that could be used to implement multi-threaded spidering/crawling. In my opinion, I'd want to retire the deprecated libraries and rewrite the utility in a modern language/framework.
+# Vulnerabilities 
+TODO - publish detailed knowledge on known vulnerabilities and mitigations.  
+In the meantime, see the following extract from `spider.js` code docs [[permalink](https://github.com/kyle0r/recursive-downloader/blob/5aa9c0a33257dbcc645b4b62e404de998d8c7bbb/bin/spider.js#L17)]:
+```
+ *
+ * The script relies on parsing HTML and URI's
+ * This script uses deprecated libs/utils/frameworks. There is a high chance
+ * that these dependencies are vulnerable to exploitation.
+ *
+ * For example:
+ * casperjs  *
+ * Severity: high
+ * Improperly Controlled Modification of Dynamically-Determined Object Attributes in casperjs
+ * No fix available
+ * node_modules/casperjs
+ *
+ * https://github.com/advisories/GHSA-vrr3-5r3v-7xfw
+ * https://security.snyk.io/vuln/SNYK-JS-CASPERJS-572803
+ * 
+```
+💡🔐 It is possible this can be patched with the help of snyk.io. Further research required.
 # Bugs
 Open an issue via the GitHub project and/or submit a pull request. [[GitHub repo issues link](https://github.com/kyle0r/recursive-downloader/issues)]
 # Contributing
@@ -192,7 +217,7 @@ Since ~2012, `recursive-downloader` has been my go-to script when I've had a bat
 
 In 2012-Nov, the original `recursive-downloader` was born, using simple shell techniques, `wget` to create the download manifest and `aria2c` to perform the downloads. You can review and/or use the latest version using `wget` by looking at the git tag `2017.01.1` [🔗](https://github.com/kyle0r/recursive-downloader/tree/2017.01.1).
 
-In 2017 I wrote the first version of `spider.js` utilising `CasperJS` which in turn utilises `PhantomJS`. Sometime between 2017 and 2019 `spider.js` replaced the rudimentary `wget` functionality.
+In 2017 I wrote the first version of `spider.js` utilising `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/) which in turn utilises `PhantomJS` [🔗](https://web.archive.org/web/20240814035354/https://phantomjs.org/). Sometime between 2017 and 2019 `spider.js` replaced the rudimentary `wget` functionality.
 
 In early 2024, I began some housekeeping and documentation of the project, and wrote some new features for `spider.js`. One of my long-term goals was to publish the project. Looking to the future, these activities supported my goal of retiring the projects deprecated dependencies and porting the main logic to `node`, `python` or `rust`.
 
@@ -225,9 +250,9 @@ The first revision of `recursive-downloader.sh` was born. It utilised the `wget 
 ## InfoSec and Privacy
 As with any technology choice, there are pros and cons. As I was writing the README for this project, I went down a HTTP InfoSec rabbit hole. I have published my in-depth research on HTTP privacy and security concerns on the the Handy to know Shizzle Blog [Research on HTTP privacy and security concerns](https://coda.io/@ff0/handy-to-know-shizzle/research-on-http-privacy-and-security-concerns-7)
 # Side quest?
-I would consider the code and code docs in this repo to be a fairly holistic capture of how to write a basic web spider using `CasperJS`. The knowledge and experience gained over the years of development could be consumed and applied to speed up similar or forked projects. Sharing this knowledge was one of my motivations for publishing the project.
+I would consider the code and code docs in this repo to be a fairly holistic capture of how to write a basic web spider using `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/). The knowledge and experience gained over the years of development could be consumed and applied to speed up similar or forked projects. Sharing this knowledge was one of my motivations for publishing the project.
 
-In particular, if you study the code docs in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js), you should be in a strong position to understand `CasperJS`, what it can do from a website navigation perspective, and its limitations. There is extensive documentation on how I achieved the recursive behaviour with `CasperJS`. It was challenging at first because of the async nature of some of the `CasperJS` functions. Overall, there is a considerable amount of links and citations to reference documentation and examples.
+In particular, if you study the code docs in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/bin/spider.js), you should be in a strong position to understand `CasperJS` [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/), what it can do from a website navigation perspective, and its limitations. There is extensive documentation on how I achieved the recursive behaviour with `CasperJS`. It was challenging at first because of the async nature of some of the `CasperJS` functions. Overall, there is a considerable amount of links and citations to reference documentation and examples.
 
 The knowledge captured in `/docs/NOTES.txt` [🔗](https://github.com/kyle0r/recursive-downloader/blob/main/docs/NOTES.txt) should also provide some useful insights and cover some of the challenges I faced and how I overcame them, in particular how I kept the utility running through numerous Linux distro upgrades over the years.
 
@@ -240,4 +265,3 @@ Per the license:
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-

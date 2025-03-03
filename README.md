@@ -146,7 +146,7 @@ A mirror of the svg is available in the docs folder.
 
 The diagram should provide just enough detail to give a good visual introduction and overview of how the `recursive-downloader` script runs and interacts with the user and CasperJS [🔗](https://web.archive.org/web/20220327030709/https://casperjs-dev.readthedocs.io/en/latest/), and the projects main dependencies.
 
-![enter image description here](https://kroki.io/seqdiag/svg/eNqVkU1Pg0AQhu_-ignpQQ9w8OrHRbGhMdG09WQMGZaxLKG7687aHoz_XSi0Lg3UeH0zz5OZd5g-cokr-DoDEJUECG8hQy7gtcKMKriBwJL4tCw3FOZ6qyqNOdmIi-DtqmZ2szUTTOL7ZPk0Dzywi2DyMk_Sh-Qx9pDr8BfpeZTOCe6QDdnZwreJXVZyVDKwkc0SJbfGY-ikJ9PasbNo_safC1ROr_u8acNIqpKEm_H5PmgXXAgrjbvwzZ6mVm8pY7Ibsp6zvWeEqas6MEPrNlUeMb2aR5vYv5NhjUq-E7t__BStxPRgSAcMYy9uyEvhObvgtLIbGilwGi97Y35nAxc3s98_1TrtoA==)
+![recursive-downloader sequence diagram](https://kroki.io/seqdiag/svg/eNqVkz1PwzAQhvf-ilPUAYZkYOVjgYBSIYHaMiEUOc5BHKW28Zl2QPx3kjotdpW0Ysyrex6d31MIP0vBPuB7AsAbARDfQMGogteGFdjANUQG-Zchsca4VBvZKFaiSaiK3i5bZjvbMtE0vcuWT_PIA_sIpi_zLL_PHlMPuYr_kMAjVYlwy0ijmS18G99mNSU1AWnRLVGTMx5CRz2FUpasYfo0_lwxadUq5LULEyFr5HZGZ7vALbjgRmh77ps9TaveYEFo1mg8p3vPCNNWtWeG1u2qPGCCmkeb2J2TYMWkeEey_7gpM4Lle0M-YBg7cUdecM_ZB8eV_dBIgQ_pMhjzOxt4cbilY_ofoP3u8snPLx9H9iw=)
 ## Logic `spider.js`
 Here is a permalink to the logic doc block in `spider.js` [🔗](https://github.com/kyle0r/recursive-downloader/blob/d25ff030c86bd0b197ec5276cfa74af157d35465/bin/spider.js#L113).
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This script was developed on Debian.
 # The majority of this script should be POSIX compliant. 
@@ -26,8 +26,8 @@ version=2024.42.1
 #  version convention: YEAR.WEEK.RELEASE - date +'%G.%V.1'
 #+ where 1 is incremented per release within the given week
 
-me="${0##*/}" # basename
-me="${me%.sh}" # strip .sh suffix
+me=${0##*/} # basename
+me=${me%.sh} # strip .sh suffix
 print_version() { printf "%s version: %s\n" "$me" "$version"; }
 
 : <<CHANGELOG
@@ -84,6 +84,18 @@ Script updated to use spider.js (CasperJS) instead of wget
 * Added an INFO block regarding a possible future enhancement to replace the
   shell process with aria2c via exec.
 CHANGELOG
+
+: <<'TODO'
+* Add getopts functionality
+
+* Add --non-interactive (or similar) mode to support headless invocation
+
+* As/when dash supports pipefail, and dash >= version is available,
+  consider how to invoke dash rather than bash and aim for POSIX compliance.
+  For example: exec dash $(readlink -f "$0") "$@"
+  Alt: perhaps switch primary interpreter to env sh and if pipefail is not
+  supported then invoke env bash?
+TODO
 
 ######################################################################
 # START functions
@@ -147,10 +159,11 @@ if [ -n "$HTTP_USER" ] && [ -z "$HTTP_PW" ]; then
 fi
 
 #  TODO InfoSec: write a aria2c config to temp file, to mitigate credentials
-#+ appearing in the process list
+#+ appearing in the process list. Need to research if aria2c already obfuscates
+#+ this?
 
 # Set a default if EDITOR is not set
-# TODO upgrade this logic to the example in install.sh
+# TODO upgrade this logic to the detect_editor() function from install.sh
 : "${EDITOR:=vim}"
 
 # Set a default if URI_FILE is not set
@@ -200,7 +213,7 @@ terminate() {
   printf "\n%s\n" "$me has been signaled to clean up and terminate..." 1>&2
 
   # ensure temp file(s) are cleaned up
-  #shellcheck disable=SC2066
+  # shellcheck disable=SC2066
   for tmp_file in "$aria_downloads_manifest"; do
     [ -e "$tmp_file" ] && { echo "removing temp file: $tmp_file" 1>&2; rm "$tmp_file"; }
   done
@@ -278,7 +291,7 @@ generic_pause
   #+ variable? This must be due to shell internal handling?
 
   # cd to $script_dir - important that spider.js can find node_modules etc
-  cd -- "$script_dir" || die "Could not change dir to script dir: $script_dir. Aborting."
+  cd -- "$script_dir" || die "Could not change dir to script dir: '$script_dir'. Aborting."
 
   #  TODO consider splitting stdout and stderr into seperate variables
   #+ https://stackoverflow.com/q/11027679
@@ -286,7 +299,24 @@ generic_pause
   # spider.js must be available on $PATH which is setup by install.sh
   if output=$(spider.js 2>&1); then
     # The sed removes blank lines and extracts the relevant output
-    echo "$output" | tac | sed -n '/^$/d;/==CUT==/q;p' | tac > "$aria_downloads_manifest"
+    tac <<EOM | sed -n '/^$/d;/==CUT==/q;p' | tac > "$aria_downloads_manifest"
+$output
+EOM
+    pipeline_exit_code="$?"
+    case $(kill -l "$pipeline_exit_code") in
+        EXIT | PIPE)
+            #  no-op scenario
+            #+ This case handles normal EXIT or PIPEFAIL exit from
+            #+ the pipeline.
+            #+ sed quits early when it encouters the ==CUT== mark
+            #+ sometimes this was raising a PIPEFAIL.
+            ;;
+        *)
+            # otherwise there was a real error in the pipeline
+            # exit the subshell
+            exit "$pipeline_exit_code"
+            ;;
+    esac
   else
     die "
 
@@ -297,7 +327,7 @@ The captured output was:
 $output
 "
   fi
-) || die 'There was an error in the spider.js subshell. Aborting.'
+) || die "There was an error in the spider.js subshell. exit code: $? Aborting."
 
 echo;echo
 echo -n "Would you like to view/edit the download manifest with $EDITOR before the download(s) start? [Y/n]? "

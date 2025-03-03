@@ -250,8 +250,43 @@
  *   The script should really have a throttle mechanism to prevent overloading
  *   the remote sites during spider/crawl operations
  *
- * * Add an option to prevent the spider from traversing out of/above the
- *   starting URI path. This may actually be a reasonable default?
+ *   --
+ *
+ *   Editor's note: The indentexpr=GetJavascriptIndent() caused indentation
+ *   problems when pasting and autoindenting the following text blocks, due to
+ *   the text containing opening parentheses. Workaround: disable indentexpr.
+ *
+ * * In the context of handling the pathname aka path component of a URI, where
+ *   the pathname consists of zero or more path or directory components
+ *   delimited by the forward slash character. 
+ *
+ *   If we then consider the concept of path depth, where depth is represented
+ *   by the number of path components delimited by forward slashes (path or
+ *   directory delimiters), then we can use the following terminology: path
+ *   ascension is when the rightmost path component is removed from the path
+ *   (ascending - moving up - moving above the current path, moving to a
+ *   shallower path), and descension is when a path component is appended to the
+ *   right of a path (descending - moving down - moving below the current path,
+ *   moving to a deeper path).
+ *
+ *   Now, when we consider processing a URI from the config.uriFile (which
+ *   provides the starting URI and pathname), it may be useful to optionally
+ *   prevent path ascension when recursively parsing hrefs. That is, descending
+ *   to deeper paths below the starting pathname is desirable, but ascending to
+ *   shallower paths above the starting pathname is undesirable.
+ *
+ *   This "don't ascend" behaviour might actually be a safe/reasonable default?
+ *   For example, GNU find has the concept of "starting-point" and does not
+ *   ascend from the starting-point.
+ *   cite: https://t.ly/w3W4R 
+ *
+ *   It might be possible to implement this feature/option by counting and
+ *   recording the path depth of each URI (the number of forward slashes (path
+ *   delimiters) in the URI pathname) and skipping URIs that are shallower than
+ *   the depth of the starting URI pathname. In this case, it would be important
+ *   to consider the handling of trailing slashes in the pathname.
+ *
+ *   --
 */
 
 // SCRIPT START
@@ -262,9 +297,11 @@ var DEBUG = false;
 var fs = require('fs');
 
 /*
- * If /dev/tty is writable, then we can use this device for sending progress updates to the terminal
- * /dev/tty: In each process, a synonym for the controlling terminal associated with the process group of that process, if any.
- * cite: https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap10.html
+ * If /dev/tty is writable, then we can use this device for sending progress 
+ * updates to the terminal. 
+ * /dev/tty: In each process, a synonym for the controlling terminal associated
+ * with the process group of that process, if any.
+ * cite: https://t.ly/J5hD4 
 */
 var TTY = false;
 if (fs.isWritable('/dev/tty')) TTY = true;
@@ -463,11 +500,12 @@ function updateProgressIndicator(msg) {
   // ref: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
   // ref: https://medium.com/israeli-tech-radar/terminal-escape-codes-are-awesome-heres-why-c8eb938b1a1c
   // ref: https://stackoverflow.com/q/4842424/490487
-  // \r aka ^M aka 0x0D aka CR writes a carriage return, which sends the terminal cursor to the left most position on the same line
+  // ref: https://www2.ccs.neu.edu/research/gpc/VonaUtils/vona/terminal/vtansi.htm
+  // \r aka ^M aka 0x0D aka CR writes a carriage return, which sends the terminal cursor to the left most position on the same line (first column of the current row)
   // \E aka ^[ aka 0x1B aka ESC starts an escape sequence
   // [ is the Control Sequence Introducer (CSI) which per the ANSI escape code docs is an Fe (C1) type escape sequence
   // K ^K aka EL is the control sequence for "Erase in Line" aka "clear to end of line" (see also: tput el)
-  // summary: sends the terminal cursor to the left and clears to end of line
+  // summary: sends the terminal cursor to the left and clears to end of line (row)
   /* jshint -W113 */
   if (TTY) fs.write('/dev/tty', '\r[KProgress: '+msg); 
   /* jshint +W113 */
@@ -486,6 +524,7 @@ function spider() {
   if ( false === isInArray(visitedUris, myUri.href) ) {
     // TODO should uriBlacklist && uriPathBlacklist be checked here too?
     // Current logic: the assumption is that the URI's in the uriFile do not need to be compared to the blacklists
+    // ^^ I think this is now an invalid statement? Recent code review suggests all myUri.host values are evaludated by the domainWhitelist logic?
     if ( true === valueMatchesAtLeastOnePattern(domainWhitelist, myUri.host) ) {
       // fetch HEAD myUri i.e. don't download, get info first
       casper.open(myUri.href, { method: 'head' }).then(function(response) {
